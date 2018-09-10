@@ -1,0 +1,7 @@
+.idea/
+logs/*
+!logs/.keep
+*.pyc
+venv/
+env/
+.DS_Store
