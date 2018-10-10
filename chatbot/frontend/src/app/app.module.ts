@@ -22,7 +22,9 @@ import { AlertService, AuthenticationService, UserService } from './_services/in
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { JwtInterceptor } from './_helpers/index';
 import { FormsModule }   from '@angular/forms';
-//import { fakeBackendProvider } from './_helpers/index';
+import { AlertComponent } from './_directives/index';
+import { fakeBackendProvider } from './_helpers/index';
+import { AuthGuard } from './_guards/index';
 
 @NgModule({
   imports: [
@@ -37,9 +39,11 @@ import { FormsModule }   from '@angular/forms';
   ],
   declarations: [
     AppComponent,
-    LoginComponent
+    LoginComponent,
+    AlertComponent,
   ],
   providers: [
+    AuthGuard,
     AlertService,
     AuthenticationService,
     UserService,
@@ -48,7 +52,7 @@ import { FormsModule }   from '@angular/forms';
       useClass: JwtInterceptor,
       multi: true
     },
-    //fakeBackendProvider
+    fakeBackendProvider
   ],
   bootstrap: [AppComponent]
 })

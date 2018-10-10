@@ -1,7 +1,8 @@
 ﻿import { Component, OnInit } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 
-import { AlertService, AuthenticationService } from '../_services/index';
+import { AlertService, AuthenticationService, UserService } from '../_services/index';
+import { User } from '../_models/index';
 
 @Component({
     moduleId: module.id.toString(),
@@ -12,19 +13,27 @@ export class LoginComponent implements OnInit {
     model: any = {};
     loading = false;
     returnUrl: string;
+    write: any = {"username":"test",
+                  "password":"p",
+                  "firstName":"a",
+                  "lastName":"b"};
+    users: User[] = [];
 
     constructor(
         private route: ActivatedRoute,
         private router: Router,
         private authenticationService: AuthenticationService,
+        private userService: UserService,
         private alertService: AlertService) { }
 
     ngOnInit() {
+        
         // reset login status
         this.authenticationService.logout();
 
-        // get return url from route parameters or default to '/'
-        this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/';
+        //clear localstroage and register the user
+        localStorage.clear();
+        
     }
 
     login() {
@@ -32,10 +41,11 @@ export class LoginComponent implements OnInit {
         this.authenticationService.login(this.model.username, this.model.password)
             .subscribe(
                 data => {
-                    this.router.navigate([this.returnUrl]);
+                    alert("IM IN");
+                    this.router.navigate(['agent/default/intents']);
                 },
                 error => {
-                    this.alertService.error(error);
+                    alert("not working");
                     this.loading = false;
                 });
     }
