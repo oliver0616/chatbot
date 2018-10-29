@@ -13,10 +13,6 @@ export class LoginComponent implements OnInit {
     model: any = {};
     loading = false;
     returnUrl: string;
-    write: any = {"username":"test",
-                  "password":"p",
-                  "firstName":"a",
-                  "lastName":"b"};
     users: User[] = [];
 
     constructor(
@@ -39,14 +35,21 @@ export class LoginComponent implements OnInit {
     login() {
         this.loading = true;
         this.authenticationService.login(this.model.username, this.model.password)
-            .subscribe(
+            .then(
                 data => {
-                    alert("IM IN");
-                    this.router.navigate(['agent/default/intents']);
-                },
-                error => {
-                    alert("not working");
-                    this.loading = false;
-                });
+                    var obj = data["status"]
+                    console.log(obj)
+                    if (obj === "ok")
+                    {
+                        localStorage.setItem('currentUser', JSON.stringify("username"));
+                        alert("Correct Username and Password");
+                        this.router.navigate(['agent/default/intents']);
+                    }
+                    else{
+                        alert("Incorrect Username and Password");
+                        this.loading = false;
+                    }
+                }
+            );
     }
 }

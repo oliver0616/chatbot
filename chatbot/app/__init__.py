@@ -32,6 +32,7 @@ from app.intents.controllers import intents
 from app.train.controllers import train
 from app.endpoint.controllers import endpoint
 from app.entities.controllers import entities_blueprint
+from app.login.controllers import login_blueprint
 
 app.register_blueprint(nlu)
 app.register_blueprint(intents)
@@ -39,6 +40,7 @@ app.register_blueprint(train)
 app.register_blueprint(endpoint)
 app.register_blueprint(bots)
 app.register_blueprint(entities_blueprint)
+app.register_blueprint(login_blueprint)
 
 
 @app.errorhandler(404)
