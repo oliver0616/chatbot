@@ -1,0 +1,2974 @@
+
+Speech and Language Processing. Daniel Jurafsky & James H. Martin. Copyright c©
+2017. All rights reserved. Draft of August 28, 2017.
+
+CHAPTER
+
+13 Statistical Parsing
+The characters in Damon Runyon’s short stories are willing to bet “on any propo-
+sition whatever”, as Runyon says about Sky Masterson in The Idyll of Miss Sarah
+Brown, from the probability of getting aces back-to-back to the odds against a man
+being able to throw a peanut from second base to home plate. There is a moral here
+for language processing: with enough knowledge we can figure the probability of
+just about anything. The last two chapters have introduced sophisticated models of
+syntactic structure and its parsing. Here, we show that it is possible to build proba-
+bilistic models of syntactic knowledge and use some of this probabilistic knowledge
+to build efficient probabilistic parsers.
+
+One crucial use of probabilistic parsing is to solve the problem of disambigua-
+tion. Recall from Chapter 12 that sentences on average tend to be syntactically
+ambiguous because of phenomena like coordination ambiguity and attachment
+ambiguity. The CKY parsing algorithm can represent these ambiguities in an effi-
+cient way but is not equipped to resolve them. A probabilistic parser offers a solution
+to the problem: compute the probability of each interpretation and choose the most
+probable interpretation. Thus, due to the prevalence of ambiguity, most modern
+parsers used for natural language understanding tasks (semantic analysis, summa-
+rization, question-answering, machine translation) are of necessity probabilistic.
+
+The most commonly used probabilistic grammar formalism is the probabilistic
+context-free grammar (PCFG), a probabilistic augmentation of context-free gram-
+mars in which each rule is associated with a probability. We introduce PCFGs in the
+next section, showing how they can be trained on Treebank grammars and how they
+can be parsed. We present the most basic parsing algorithm for PCFGs, which is the
+probabilistic version of the CKY algorithm that we saw in Chapter 12.
+
+We then show a number of ways that we can improve on this basic probability
+model (PCFGs trained on Treebank grammars). One method of improving a trained
+Treebank grammar is to change the names of the non-terminals. By making the
+non-terminals sometimes more specific and sometimes more general, we can come
+up with a grammar with a better probability model that leads to improved parsing
+scores. Another augmentation of the PCFG works by adding more sophisticated
+conditioning factors, extending PCFGs to handle probabilistic subcategorization
+information and probabilistic lexical dependencies.
+
+Heavily lexicalized grammar formalisms such as Lexical-Functional Grammar
+(LFG) (Bresnan, 1982), Head-Driven Phrase Structure Grammar (HPSG) (Pollard
+and Sag, 1994), Tree-Adjoining Grammar (TAG) (Joshi, 1985), and Combinatory
+Categorial Grammar (CCG) pose additional problems for probabilistic parsers. Sec-
+tion 13.7 introduces the task of supertagging and the use of heuristic search methods
+based on the A* algorithm in the context of CCG parsing.
+
+Finally, we describe the standard techniques and metrics for evaluating parsers
+and discuss some relevant psychological results on human parsing.
+
+
+
+2 CHAPTER 13 • STATISTICAL PARSING
+
+13.1 Probabilistic Context-Free Grammars
+
+The simplest augmentation of the context-free grammar is the Probabilistic Context-
+Free Grammar (PCFG), also known as the Stochastic Context-Free GrammarPCFG
+(SCFG), first proposed by Booth (1969). Recall that a context-free grammar G isSCFG
+defined by four parameters (N, ?, R, S); a probabilistic context-free grammar is also
+defined by four parameters, with a slight augmentation to each of the rules in R:
+
+N a set of non-terminal symbols (or variables)
+? a set of terminal symbols (disjoint from N)
+R a set of rules or productions, each of the form A? ? [p],
+
+where A is a non-terminal,
+? is a string of symbols from the infinite set of strings (??N)?,
+and p is a number between 0 and 1 expressing P(? |A)
+
+S a designated start symbol
+
+That is, a PCFG differs from a standard CFG by augmenting each rule in R with
+a conditional probability:
+
+A? ? [p] (13.1)
+
+Here p expresses the probability that the given non-terminal A will be expanded
+to the sequence ? . That is, p is the conditional probability of a given expansion ?
+given the left-hand-side (LHS) non-terminal A. We can represent this probability as
+
+P(A? ? )
+
+or as
+P(A? ? |A)
+
+or as
+P(RHS|LHS)
+
+Thus, if we consider all the possible expansions of a non-terminal, the sum of their
+probabilities must be 1: ?
+
+?
+
+P(A? ? ) = 1
+
+Figure 13.1 shows a PCFG: a probabilistic augmentation of the L1 miniature
+English CFG grammar and lexicon. Note that the probabilities of all of the expan-
+sions of each non-terminal sum to 1. Also note that these probabilities were made
+up for pedagogical purposes. A real grammar has a great many more rules for each
+non-terminal; hence, the probabilities of any particular rule would tend to be much
+smaller.
+
+A PCFG is said to be consistent if the sum of the probabilities of all sentencesConsistent
+in the language equals 1. Certain kinds of recursive rules cause a grammar to be
+inconsistent by causing infinitely looping derivations for some sentences. For ex-
+ample, a rule S? S with probability 1 would lead to lost probability mass due to
+derivations that never terminate. See Booth and Thompson (1973) for more details
+on consistent and inconsistent grammars.
+
+
+
+13.1 • PROBABILISTIC CONTEXT-FREE GRAMMARS 3
+
+Grammar Lexicon
+S ? NP VP [.80] Det ? that [.10] | a [.30] | the [.60]
+S ? Aux NP VP [.15] Noun ? book [.10] | flight [.30]
+S ? VP [.05] | meal [.015] | money [.05]
+NP ? Pronoun [.35] | flight [.40] | dinner [.10]
+NP ? Proper-Noun [.30] Verb ? book [.30] | include [.30]
+NP ? Det Nominal [.20] | prefer [.40]
+NP ? Nominal [.15] Pronoun ? I [.40] | she [.05]
+Nominal ? Noun [.75] | me [.15] | you [.40]
+Nominal ? Nominal Noun [.20] Proper-Noun ? Houston [.60]
+Nominal ? Nominal PP [.05] | NWA [.40]
+VP ? Verb [.35] Aux ? does [.60] | can [40]
+VP ? Verb NP [.20] Preposition ? from [.30] | to [.30]
+VP ? Verb NP PP [.10] | on [.20] | near [.15]
+VP ? Verb PP [.15] | through [.05]
+VP ? Verb NP NP [.05]
+VP ? VP PP [.15]
+PP ? Preposition NP [1.0]
+
+Figure 13.1 A PCFG that is a probabilistic augmentation of the L1 miniature English CFG
+grammar and lexicon of Fig. ??. These probabilities were made up for pedagogical purposes
+and are not based on a corpus (since any real corpus would have many more rules, so the true
+probabilities of each rule would be much smaller).
+
+How are PCFGs used? A PCFG can be used to estimate a number of useful
+probabilities concerning a sentence and its parse tree(s), including the probability of
+a particular parse tree (useful in disambiguation) and the probability of a sentence
+or a piece of a sentence (useful in language modeling). Let’s see how this works.
+
+13.1.1 PCFGs for Disambiguation
+A PCFG assigns a probability to each parse tree T (i.e., each derivation) of a sen-
+tence S. This attribute is useful in disambiguation. For example, consider the two
+parses of the sentence “Book the dinner flight” shown in Fig. 13.2. The sensible
+parse on the left means “Book a flight that serves dinner”. The nonsensical parse
+on the right, however, would have to mean something like “Book a flight on behalf
+of ‘the dinner”’ just as a structurally similar sentence like “Can you book John a
+flight?” means something like “Can you book a flight on behalf of John?”
+
+The probability of a particular parse T is defined as the product of the probabil-
+ities of all the n rules used to expand each of the n non-terminal nodes in the parse
+tree T, where each rule i can be expressed as LHSi? RHSi:
+
+P(T,S) =
+n?
+
+i=1
+
+P(RHSi|LHSi) (13.2)
+
+The resulting probability P(T,S) is both the joint probability of the parse and the
+sentence and also the probability of the parse P(T ). How can this be true? First, by
+the definition of joint probability:
+
+P(T,S) = P(T )P(S|T ) (13.3)
+
+
+
+4 CHAPTER 13 • STATISTICAL PARSING
+
+But since a parse tree includes all the words of the sentence, P(S|T ) is 1. Thus,
+
+P(T,S) = P(T )P(S|T ) = P(T ) (13.4)
+
+S
+
+VP
+
+NP
+
+Nominal
+
+Noun
+
+flight
+
+Nominal
+
+Noun
+
+dinner
+
+Det
+
+the
+
+Verb
+
+Book
+
+S
+
+VP
+
+NP
+
+Nominal
+
+Noun
+
+flight
+
+NP
+
+Nominal
+
+Noun
+
+dinner
+
+Det
+
+the
+
+Verb
+
+Book
+
+Rules P Rules P
+S ? VP .05 S ? VP .05
+VP ? Verb NP .20 VP ? Verb NP NP .10
+NP ? Det Nominal .20 NP ? Det Nominal .20
+Nominal ? Nominal Noun .20 NP ? Nominal .15
+Nominal ? Noun .75 Nominal ? Noun .75
+
+Nominal ? Noun .75
+Verb ? book .30 Verb ? book .30
+Det ? the .60 Det ? the .60
+Noun ? dinner .10 Noun ? dinner .10
+Noun ? flight .40 Noun ? flight .40
+
+Figure 13.2 Two parse trees for an ambiguous sentence. The transitive parse on the left
+corresponds to the sensible meaning “Book a flight that serves dinner”, while the ditransitive
+parse on the right corresponds to the nonsensical meaning “Book a flight on behalf of ‘the
+dinner’ ”.
+
+We can compute the probability of each of the trees in Fig. 13.2 by multiplying
+the probabilities of each of the rules used in the derivation. For example, the proba-
+bility of the left tree in Fig. 13.2a (call it Tle f t ) and the right tree (Fig. 13.2b or Tright )
+can be computed as follows:
+
+P(Tle f t) = .05? .20? .20? .20? .75? .30? .60? .10? .40 = 2.2×10?6
+
+P(Tright) = .05? .10? .20? .15? .75? .75? .30? .60? .10? .40 = 6.1×10?7
+
+We can see that the left (transitive) tree in Fig. 13.2 has a much higher probability
+than the ditransitive tree on the right. Thus, this parse would correctly be chosen by
+a disambiguation algorithm that selects the parse with the highest PCFG probability.
+
+Let’s formalize this intuition that picking the parse with the highest probability
+is the correct way to do disambiguation. Consider all the possible parse trees for a
+given sentence S. The string of words S is called the yield of any parse tree over S.Yield
+
+
+
+13.1 • PROBABILISTIC CONTEXT-FREE GRAMMARS 5
+
+Thus, out of all parse trees with a yield of S, the disambiguation algorithm picks the
+parse tree that is most probable given S:
+
+T? (S) = argmax
+T s.t.S=yield(T )
+
+P(T |S) (13.5)
+
+By definition, the probability P(T |S) can be rewritten as P(T,S)/P(S), thus lead-
+ing to
+
+T? (S) = argmax
+T s.t.S=yield(T )
+
+P(T,S)
+P(S)
+
+(13.6)
+
+Since we are maximizing over all parse trees for the same sentence, P(S) will be
+a constant for each tree, so we can eliminate it:
+
+T? (S) = argmax
+T s.t.S=yield(T )
+
+P(T,S) (13.7)
+
+Furthermore, since we showed above that P(T,S) = P(T ), the final equation
+for choosing the most likely parse neatly simplifies to choosing the parse with the
+highest probability:
+
+T? (S) = argmax
+T s.t.S=yield(T )
+
+P(T ) (13.8)
+
+13.1.2 PCFGs for Language Modeling
+A second attribute of a PCFG is that it assigns a probability to the string of words
+constituting a sentence. This is important in language modeling, whether for use
+in speech recognition, machine translation, spelling correction, augmentative com-
+munication, or other applications. The probability of an unambiguous sentence is
+P(T,S) = P(T ) or just the probability of the single parse tree for that sentence. The
+probability of an ambiguous sentence is the sum of the probabilities of all the parse
+trees for the sentence:
+
+P(S) =
+?
+
+T s.t.S=yield(T )
+P(T,S) (13.9)
+
+=
+?
+
+T s.t.S=yield(T )
+P(T ) (13.10)
+
+An additional feature of PCFGs that is useful for language modeling is their
+ability to assign a probability to substrings of a sentence. For example, suppose we
+want to know the probability of the next word wi in a sentence given all the words
+we’ve seen so far w1, ...,wi?1. The general formula for this is
+
+P(wi|w1,w2, ...,wi?1) =
+P(w1,w2, ...,wi?1,wi)
+
+P(w1,w2, ...,wi?1)
+(13.11)
+
+We saw in Chapter 4 a simple approximation of this probability using N-grams,
+conditioning on only the last word or two instead of the entire context; thus, the
+bigram approximation would give us
+
+P(wi|w1,w2, ...,wi?1)?
+P(wi?1,wi)
+
+P(wi?1)
+(13.12)
+
+
+
+6 CHAPTER 13 • STATISTICAL PARSING
+
+But the fact that the N-gram model can only make use of a couple words of
+context means it is ignoring potentially useful prediction cues. Consider predicting
+the word after in the following sentence from Chelba and Jelinek (2000):
+
+(13.13) the contract ended with a loss of 7 cents after trading as low as 9 cents
+
+A trigram grammar must predict after from the words 7 cents, while it seems clear
+that the verb ended and the subject contract would be useful predictors that a PCFG-
+based parser could help us make use of. Indeed, it turns out that PCFGs allow us to
+condition on the entire previous context w1,w2, ...,wi?1 shown in Eq. 13.11.
+
+In summary, this section and the previous one have shown that PCFGs can be
+applied both to disambiguation in syntactic parsing and to word prediction in lan-
+guage modeling. Both of these applications require that we be able to compute the
+probability of parse tree T for a given sentence S. The next few sections introduce
+some algorithms for computing this probability.
+
+13.2 Probabilistic CKY Parsing of PCFGs
+
+The parsing problem for PCFGs is to produce the most-likely parse T? for a given
+sentence S, that is,
+
+T? (S) = argmax
+T s.t.S=yield(T )
+
+P(T ) (13.14)
+
+The algorithms for computing the most likely parse are simple extensions of the
+standard algorithms for parsing; most modern probabilistic parsers are based on the
+probabilistic CKY algorithm, first described by Ney (1991).ProbabilisticCKY
+
+As with the CKY algorithm, we assume for the probabilistic CKY algorithm that
+the PCFG is in Chomsky normal form. Recall from page ?? that grammars in CNF
+are restricted to rules of the form A ? B C, or A ? w. That is, the right-hand side
+of each rule must expand to either two non-terminals or to a single terminal.
+
+For the CKY algorithm, we represented each sentence as having indices between
+the words. Thus, an example sentence like
+
+(13.15) Book the flight through Houston.
+
+would assume the following indices between each word:
+
+(13.16) 0© Book 1© the 2© flight 3© through 4© Houston 5©
+Using these indices, each constituent in the CKY parse tree is encoded in a
+
+two-dimensional matrix. Specifically, for a sentence of length n and a grammar
+that contains V non-terminals, we use the upper-triangular portion of an (n+ 1)×
+(n+ 1) matrix. For CKY, each cell table[i, j] contained a list of constituents that
+could span the sequence of words from i to j. For probabilistic CKY, it’s slightly
+simpler to think of the constituents in each cell as constituting a third dimension of
+maximum length V . This third dimension corresponds to each non-terminal that can
+be placed in this cell, and the value of the cell is then a probability for that non-
+terminal/constituent rather than a list of constituents. In summary, each cell [i, j,A]
+in this (n+1)× (n+1)×V matrix is the probability of a constituent of type A that
+spans positions i through j of the input.
+
+Figure 13.3 gives pseudocode for this probabilistic CKY algorithm, extending
+the basic CKY algorithm from Fig. ??.
+
+
+
+13.3 • WAYS TO LEARN PCFG RULE PROBABILITIES 7
+
+function PROBABILISTIC-CKY(words,grammar) returns most probable parse
+and its probability
+
+for j? from 1 to LENGTH(words) do
+for all { A | A ? words[ j] ? grammar}
+
+table[ j?1, j,A]?P(A? words[ j])
+for i? from j?2 downto 0 do
+
+for k? i+1 to j?1 do
+for all { A | A ? BC ? grammar,
+
+and table[i,k,B] > 0 and table[k, j,C] > 0 }
+if (table[i,j,A] < P(A ? BC) × table[i,k,B] × table[k,j,C]) then
+
+table[i,j,A]?P(A ? BC) × table[i,k,B] × table[k,j,C]
+back[i,j,A]?{k,B,C}
+
+return BUILD TREE(back[1, LENGTH(words), S]), table[1, LENGTH(words), S]
+
+Figure 13.3 The probabilistic CKY algorithm for finding the maximum probability parse
+of a string of num words words given a PCFG grammar with num rules rules in Chomsky
+normal form. back is an array of backpointers used to recover the best parse. The build tree
+function is left as an exercise to the reader.
+
+Like the basic CKY algorithm, the probabilistic CKY algorithm as shown in
+Fig. 13.3 requires a grammar in Chomsky normal form. Converting a probabilistic
+grammar to CNF requires that we also modify the probabilities so that the probability
+of each parse remains the same under the new CNF grammar. Exercise 13.2 asks
+you to modify the algorithm for conversion to CNF in Chapter 12 so that it correctly
+handles rule probabilities.
+
+In practice, a generalized CKY algorithm that handles unit productions directly
+is typically used. Recall that Exercise 13.3 asked you to make this change in CKY;
+Exercise 13.3 asks you to extend this change to probabilistic CKY.
+
+Let’s see an example of the probabilistic CKY chart, using the following mini-
+grammar, which is already in CNF:
+
+S ? NP VP .80 Det ? the .40
+NP ? Det N .30 Det ? a .40
+V P ? V NP .20 N ? meal .01
+
+V ? includes .05 N ? f light .02
+
+Given this grammar, Fig. 13.4 shows the first steps in the probabilistic CKY
+parse of the following example:
+
+(13.17) The flight includes a meal
+
+13.3 Ways to Learn PCFG Rule Probabilities
+
+Where do PCFG rule probabilities come from? There are two ways to learn proba-
+bilities for the rules of a grammar. The simplest way is to use a treebank, a corpus
+of already parsed sentences. Recall that we introduced in Chapter 11 the idea of
+treebanks and the commonly used Penn Treebank (Marcus et al., 1993), a collec-
+tion of parse trees in English, Chinese, and other languages that is distributed by the
+Linguistic Data Consortium. Given a treebank, we can compute the probability of
+each expansion of a non-terminal by counting the number of times that expansion
+
+
+
+8 CHAPTER 13 • STATISTICAL PARSING
+
+The flight
+
+[0,1] [0,2] [0,3]
+
+[1,2] [1,3]
+
+[2,3]
+
+Det: .40
+
+includes a meal
+
+[3,4]
+
+[4,5]
+
+N: .02
+
+V: .05
+
+NP: .30 *.40 *.02
+= .0024
+
+[0,4]
+
+[1,4]
+
+[2,4]
+
+[3,5]
+
+[2,5]
+
+[1,5]
+
+[0,5]
+
+Det: .40
+
+N: .01
+
+Figure 13.4 The beginning of the probabilistic CKY matrix. Filling out the rest of the chart
+is left as Exercise 13.4 for the reader.
+
+occurs and then normalizing.
+
+P(? ? ? |?) = Count(? ? ? )?
+? Count(? ? ?)
+
+=
+Count(? ? ? )
+
+Count(?)
+(13.18)
+
+If we don’t have a treebank but we do have a (non-probabilistic) parser, we can
+generate the counts we need for computing PCFG rule probabilities by first parsing
+a corpus of sentences with the parser. If sentences were unambiguous, it would be
+as simple as this: parse the corpus, increment a counter for every rule in the parse,
+and then normalize to get probabilities.
+
+But wait! Since most sentences are ambiguous, that is, have multiple parses, we
+don’t know which parse to count the rules in. Instead, we need to keep a separate
+count for each parse of a sentence and weight each of these partial counts by the
+probability of the parse it appears in. But to get these parse probabilities to weight
+the rules, we need to already have a probabilistic parser.
+
+The intuition for solving this chicken-and-egg problem is to incrementally im-
+prove our estimates by beginning with a parser with equal rule probabilities, then
+parse the sentence, compute a probability for each parse, use these probabilities to
+
+
+
+13.4 • PROBLEMS WITH PCFGS 9
+
+weight the counts, re-estimate the rule probabilities, and so on, until our proba-
+bilities converge. The standard algorithm for computing this solution is called the
+inside-outside algorithm; it was proposed by Baker (1979) as a generalization of theInside-outside
+forward-backward algorithm of Chapter 9. Like forward-backward, inside-outside
+is a special case of the Expectation Maximization (EM) algorithm, and hence has
+two steps: the expectation step, and the maximization step. See Lari and YoungExpectationstep
+
+Maximization
+step (1990) or Manning and Schu?tze (1999) for a complete description of the algorithm.
+
+This use of the inside-outside algorithm to estimate the rule probabilities for
+a grammar is actually a kind of limited use of inside-outside. The inside-outside
+algorithm can actually be used not only to set the rule probabilities but even to induce
+the grammar rules themselves. It turns out, however, that grammar induction is so
+difficult that inside-outside by itself is not a very successful grammar inducer; see
+the Historical Notes at the end of the chapter for pointers to other grammar induction
+algorithms.
+
+13.4 Problems with PCFGs
+
+While probabilistic context-free grammars are a natural extension to context-free
+grammars, they have two main problems as probability estimators:
+
+Poor independence assumptions: CFG rules impose an independence assumption
+on probabilities, resulting in poor modeling of structural dependencies across
+the parse tree.
+
+Lack of lexical conditioning: CFG rules don’t model syntactic facts about specific
+words, leading to problems with subcategorization ambiguities, preposition
+attachment, and coordinate structure ambiguities.
+
+Because of these problems, most current probabilistic parsing models use some
+augmented version of PCFGs, or modify the Treebank-based grammar in some way.
+In the next few sections after discussing the problems in more detail we introduce
+some of these augmentations.
+
+13.4.1 Independence Assumptions Miss Structural Dependencies
+Between Rules
+
+Let’s look at these problems in more detail. Recall that in a CFG the expansion
+of a non-terminal is independent of the context, that is, of the other nearby non-
+terminals in the parse tree. Similarly, in a PCFG, the probability of a particular
+rule like NP? Det N is also independent of the rest of the tree. By definition, the
+probability of a group of independent events is the product of their probabilities.
+These two facts explain why in a PCFG we compute the probability of a tree by just
+multiplying the probabilities of each non-terminal expansion.
+
+Unfortunately, this CFG independence assumption results in poor probability
+estimates. This is because in English the choice of how a node expands can after all
+depend on the location of the node in the parse tree. For example, in English it turns
+out that NPs that are syntactic subjects are far more likely to be pronouns, and NPs
+that are syntactic objects are far more likely to be non-pronominal (e.g., a proper
+noun or a determiner noun sequence), as shown by these statistics for NPs in the
+
+
+
+10 CHAPTER 13 • STATISTICAL PARSING
+
+Switchboard corpus (Francis et al., 1999):1
+
+Pronoun Non-Pronoun
+Subject 91% 9%
+Object 34% 66%
+
+Unfortunately, there is no way to represent this contextual difference in the prob-
+abilities in a PCFG. Consider two expansions of the non-terminal NP as a pronoun
+or as a determiner+noun. How shall we set the probabilities of these two rules? If
+we set their probabilities to their overall probability in the Switchboard corpus, the
+two rules have about equal probability.
+
+NP ? DT NN .28
+NP ? PRP .25
+
+Because PCFGs don’t allow a rule probability to be conditioned on surrounding
+context, this equal probability is all we get; there is no way to capture the fact that in
+subject position, the probability for NP? PRP should go up to .91, while in object
+position, the probability for NP? DT NN should go up to .66.
+
+These dependencies could be captured if the probability of expanding an NP as
+a pronoun (e.g., NP? PRP) versus a lexical NP (e.g., NP? DT NN) were condi-
+tioned on whether the NP was a subject or an object. Section 13.5 introduces the
+technique of parent annotation for adding this kind of conditioning.
+
+13.4.2 Lack of Sensitivity to Lexical Dependencies
+A second class of problems with PCFGs is their lack of sensitivity to the words in
+the parse tree. Words do play a role in PCFGs since the parse probability includes
+the probability of a word given a part-of-speech (i.e., from rules like V? sleep,
+NN? book, etc.).
+
+But it turns out that lexical information is useful in other places in the grammar,
+such as in resolving prepositional phrase (PP) attachment ambiguities. Since prepo-
+sitional phrases in English can modify a noun phrase or a verb phrase, when a parser
+finds a prepositional phrase, it must decide where to attach it into the tree. Consider
+the following example:
+
+(13.19) Workers dumped sacks into a bin.
+
+Figure 13.5 shows two possible parse trees for this sentence; the one on the left is
+the correct parse; Fig. 13.6 shows another perspective on the preposition attachment
+problem, demonstrating that resolving the ambiguity in Fig. 13.5 is equivalent to
+deciding whether to attach the prepositional phrase into the rest of the tree at the
+NP or VP nodes; we say that the correct parse requires VP attachment, and theVP attachment
+incorrect parse implies NP attachment.NP attachment
+
+Why doesn’t a PCFG already deal with PP attachment ambiguities? Note that
+the two parse trees in Fig. 13.5 have almost exactly the same rules; they differ only
+in that the left-hand parse has this rule:
+
+V P ? V BD NP PP
+1 Distribution of subjects from 31,021 declarative sentences; distribution of objects from 7,489 sen-
+tences. This tendency is caused by the use of subject position to realize the topic or old information
+in a sentence (Givo?n, 1990). Pronouns are a way to talk about old information, while non-pronominal
+(“lexical”) noun-phrases are often used to introduce new referents. We talk more about new and old
+information in Chapter 23.
+
+
+
+13.4 • PROBLEMS WITH PCFGS 11
+
+S
+
+VP
+
+PP
+
+NP
+
+NN
+
+bin
+
+DT
+
+a
+
+P
+
+into
+
+NP
+
+NNS
+
+sacks
+
+VBD
+
+dumped
+
+NP
+
+NNS
+
+workers
+
+S
+
+VP
+
+NP
+
+PP
+
+NP
+
+NN
+
+bin
+
+DT
+
+a
+
+P
+
+into
+
+NP
+
+NNS
+
+sacks
+
+VBD
+
+dumped
+
+NP
+
+NNS
+
+workers
+
+Figure 13.5 Two possible parse trees for a prepositional phrase attachment ambiguity. The left parse is
+the sensible one, in which “into a bin” describes the resulting location of the sacks. In the right incorrect parse,
+the sacks to be dumped are the ones which are already “into a bin”, whatever that might mean.
+
+S
+
+VP
+
+NP
+
+NNS
+
+sacks
+
+VBD
+
+dumped
+
+NP
+
+NNS
+
+workers
+
+PP
+
+NP
+
+NN
+
+bin
+
+DT
+
+a
+
+P
+
+into
+
+Figure 13.6 Another view of the preposition attachment problem. Should the PP on the right attach to the
+VP or NP nodes of the partial parse tree on the left?
+
+while the right-hand parse has these:
+
+V P ? V BD NP
+NP ? NP PP
+
+Depending on how these probabilities are set, a PCFG will always either prefer
+NP attachment or VP attachment. As it happens, NP attachment is slightly more
+common in English, so if we trained these rule probabilities on a corpus, we might
+always prefer NP attachment, causing us to misparse this sentence.
+
+But suppose we set the probabilities to prefer the VP attachment for this sen-
+tence. Now we would misparse the following sentence, which requires NP attach-
+ment:
+
+(13.20) fishermen caught tons of herring
+
+
+
+12 CHAPTER 13 • STATISTICAL PARSING
+
+What information in the input sentence lets us know that (13.20) requires NP
+attachment while (13.19) requires VP attachment?
+
+It should be clear that these preferences come from the identities of the verbs,
+nouns, and prepositions. It seems that the affinity between the verb dumped and the
+preposition into is greater than the affinity between the noun sacks and the preposi-
+tion into, thus leading to VP attachment. On the other hand, in (13.20) the affinity
+between tons and of is greater than that between caught and of, leading to NP attach-
+ment.
+
+Thus, to get the correct parse for these kinds of examples, we need a model that
+somehow augments the PCFG probabilities to deal with these lexical dependencyLexicaldependency
+statistics for different verbs and prepositions.
+
+Coordination ambiguities are another case in which lexical dependencies are
+the key to choosing the proper parse. Figure 13.7 shows an example from Collins
+(1999) with two parses for the phrase dogs in houses and cats. Because dogs is
+semantically a better conjunct for cats than houses (and because most dogs can’t fit
+inside cats), the parse [dogs in [NP houses and cats]] is intuitively unnatural and
+should be dispreferred. The two parses in Fig. 13.7, however, have exactly the same
+PCFG rules, and thus a PCFG will assign them the same probability.
+
+NP
+
+NP
+
+Noun
+
+cats
+
+Conj
+
+and
+
+NP
+
+PP
+
+NP
+
+Noun
+
+houses
+
+Prep
+
+in
+
+NP
+
+Noun
+
+dogs
+
+NP
+
+PP
+
+NP
+
+NP
+
+Noun
+
+cats
+
+Conj
+
+and
+
+NP
+
+Noun
+
+houses
+
+Prep
+
+in
+
+NP
+
+Noun
+
+dogs
+
+Figure 13.7 An instance of coordination ambiguity. Although the left structure is intu-
+itively the correct one, a PCFG will assign them identical probabilities since both structures
+use exactly the same set of rules. After Collins (1999).
+
+In summary, we have shown in this section and the previous one that probabilistic
+context-free grammars are incapable of modeling important structural and lexical
+dependencies. In the next two sections we sketch current methods for augmenting
+PCFGs to deal with both these issues.
+
+13.5 Improving PCFGs by Splitting Non-Terminals
+
+Let’s start with the first of the two problems with PCFGs mentioned above: their
+inability to model structural dependencies, like the fact that NPs in subject position
+tend to be pronouns, whereas NPs in object position tend to have full lexical (non-
+pronominal) form. How could we augment a PCFG to correctly model this fact?
+One idea would be to split the NP non-terminal into two versions: one for sub-Split
+
+
+
+13.5 • IMPROVING PCFGS BY SPLITTING NON-TERMINALS 13
+
+jects, one for objects. Having two nodes (e.g., NPsubject and NPobject) would allow
+us to correctly model their different distributional properties, since we would have
+different probabilities for the rule NPsubject ? PRP and the rule NPobject ? PRP.
+
+One way to implement this intuition of splits is to do parent annotation (John-Parentannotation
+son, 1998), in which we annotate each node with its parent in the parse tree. Thus,
+an NP node that is the subject of the sentence and hence has parent S would be anno-
+tated NPˆS, while a direct object NP whose parent is VP would be annotated NPˆVP.
+Figure 13.8 shows an example of a tree produced by a grammar that parent-annotates
+the phrasal non-terminals (like NP and VP).
+
+a) S
+
+VP
+
+NP
+
+NN
+
+flight
+
+DT
+
+a
+
+VBD
+
+need
+
+NP
+
+PRP
+
+I
+
+b) S
+
+VPˆS
+
+NPˆVP
+
+NN
+
+flight
+
+DT
+
+a
+
+VBD
+
+need
+
+NPˆS
+
+PRP
+
+I
+
+Figure 13.8 A standard PCFG parse tree (a) and one which has parent annotation on the
+nodes which aren’t pre-terminal (b). All the non-terminal nodes (except the pre-terminal
+part-of-speech nodes) in parse (b) have been annotated with the identity of their parent.
+
+In addition to splitting these phrasal nodes, we can also improve a PCFG by
+splitting the pre-terminal part-of-speech nodes (Klein and Manning, 2003b). For ex-
+ample, different kinds of adverbs (RB) tend to occur in different syntactic positions:
+the most common adverbs with ADVP parents are also and now, with VP parents
+n’t and not, and with NP parents only and just. Thus, adding tags like RBˆADVP,
+RBˆVP, and RBˆNP can be useful in improving PCFG modeling.
+
+Similarly, the Penn Treebank tag IN can mark a wide variety of parts-of-speech,
+including subordinating conjunctions (while, as, if), complementizers (that, for), and
+prepositions (of, in, from). Some of these differences can be captured by parent an-
+notation (subordinating conjunctions occur under S, prepositions under PP), while
+others require specifically splitting the pre-terminal nodes. Figure 13.9 shows an ex-
+ample from Klein and Manning (2003b) in which even a parent-annotated grammar
+incorrectly parses works as a noun in to see if advertising works. Splitting pre-
+terminals to allow if to prefer a sentential complement results in the correct verbal
+parse.
+
+To deal with cases in which parent annotation is insufficient, we can also hand-
+write rules that specify a particular node split based on other features of the tree. For
+example, to distinguish between complementizer IN and subordinating conjunction
+IN, both of which can have the same parent, we could write rules conditioned on
+other aspects of the tree such as the lexical identity (the lexeme that is likely to be a
+complementizer, as a subordinating conjunction).
+
+Node-splitting is not without problems; it increases the size of the grammar and
+hence reduces the amount of training data available for each grammar rule, leading
+to overfitting. Thus, it is important to split to just the correct level of granularity for a
+particular training set. While early models employed hand-written rules to try to find
+an optimal number of non-terminals (Klein and Manning, 2003b), modern models
+
+
+
+14 CHAPTER 13 • STATISTICAL PARSING
+
+automatically search for the optimal splits. The split and merge algorithm of PetrovSplit and merge
+et al. (2006), for example, starts with a simple X-bar grammar, alternately splits the
+non-terminals, and merges non-terminals, finding the set of annotated nodes that
+maximizes the likelihood of the training set treebank. As of the time of this writing,
+the performance of the Petrov et al. (2006) algorithm was the best of any known
+parsing algorithm on the Penn Treebank.
+
+13.6 Probabilistic Lexicalized CFGs
+
+The previous section showed that a simple probabilistic CKY algorithm for pars-
+ing raw PCFGs can achieve extremely high parsing accuracy if the grammar rule
+symbols are redesigned by automatic splits and merges.
+
+In this section, we discuss an alternative family of models in which instead of
+modifying the grammar rules, we modify the probabilistic model of the parser to
+allow for lexicalized rules. The resulting family of lexicalized parsers includes the
+well-known Collins parser (Collins, 1999) and Charniak parser (Charniak, 1997),Collins parser
+
+Charniak
+parser both of which are publicly available and widely used throughout natural language
+
+processing.
+We saw in Section ?? that syntactic constituents could be associated with a lexi-
+
+cal head, and we defined a lexicalized grammar in which each non-terminal in theLexicalizedgrammar
+tree is annotated with its lexical head, where a rule like V P? V BD NP PP would
+be extended as
+
+VP(dumped) ? VBD(dumped) NP(sacks) PP(into) (13.21)
+
+In the standard type of lexicalized grammar, we actually make a further exten-
+sion, which is to associate the head tag, the part-of-speech tags of the headwords,Head tag
+with the non-terminal symbols as well. Each rule is thus lexicalized by both the
+
+VPˆS
+
+VPˆVP
+
+PPˆVP
+
+NPˆPP
+
+NNS
+
+works
+
+NN
+
+advertising
+
+IN
+
+if
+
+VB
+
+see
+
+TO
+
+to
+
+VPˆS
+
+VPˆVP
+
+SBARˆVP
+
+SˆSBAR
+
+VPˆS
+
+VBZˆVP
+
+works
+
+NPˆS
+
+NNˆNP
+
+advertising
+
+INˆSBAR
+
+if
+
+VBˆVP
+
+see
+
+TOˆVP
+
+to
+
+Figure 13.9 An incorrect parse even with a parent-annotated parse (left). The correct parse (right), was
+produced by a grammar in which the pre-terminal nodes have been split, allowing the probabilistic grammar to
+capture the fact that if prefers sentential complements. Adapted from Klein and Manning (2003b).
+
+
+
+13.6 • PROBABILISTIC LEXICALIZED CFGS 15
+
+headword and the head tag of each constituent resulting in a format for lexicalized
+rules like
+
+VP(dumped,VBD) ? VBD(dumped,VBD) NP(sacks,NNS) PP(into,P) (13.22)
+
+We show a lexicalized parse tree with head tags in Fig. 13.10, extended from Fig. ??.
+
+TOP
+
+S(dumped,VBD)
+
+VP(dumped,VBD)
+
+PP(into,P)
+
+NP(bin,NN)
+
+NN(bin,NN)
+
+bin
+
+DT(a,DT)
+
+a
+
+P(into,P)
+
+into
+
+NP(sacks,NNS)
+
+NNS(sacks,NNS)
+
+sacks
+
+VBD(dumped,VBD)
+
+dumped
+
+NP(workers,NNS)
+
+NNS(workers,NNS)
+
+workers
+
+Internal Rules Lexical Rules
+TOP ? S(dumped,VBD) NNS(workers,NNS) ? workers
+S(dumped,VBD) ? NP(workers,NNS) VP(dumped,VBD) VBD(dumped,VBD) ? dumped
+NP(workers,NNS) ? NNS(workers,NNS) NNS(sacks,NNS) ? sacks
+VP(dumped,VBD) ? VBD(dumped, VBD) NP(sacks,NNS) PP(into,P) P(into,P) ? into
+PP(into,P) ? P(into,P) NP(bin,NN) DT(a,DT) ? a
+NP(bin,NN) ? DT(a,DT) NN(bin,NN) NN(bin,NN) ? bin
+
+Figure 13.10 A lexicalized tree, including head tags, for a WSJ sentence, adapted from Collins (1999). Below
+we show the PCFG rules that would be needed for this parse tree, internal rules on the left, and lexical rules on
+the right.
+
+To generate such a lexicalized tree, each PCFG rule must be augmented to iden-
+tify one right-hand constituent to be the head daughter. The headword for a node is
+then set to the headword of its head daughter, and the head tag to the part-of-speech
+tag of the headword. Recall that we gave in Fig. ?? a set of hand-written rules for
+identifying the heads of particular constituents.
+
+A natural way to think of a lexicalized grammar is as a parent annotation, that
+is, as a simple context-free grammar with many copies of each rule, one copy for
+each possible headword/head tag for each constituent. Thinking of a probabilistic
+lexicalized CFG in this way would lead to the set of simple PCFG rules shown below
+the tree in Fig. 13.10.
+
+Note that Fig. 13.10 shows two kinds of rules: lexical rules, which expressLexical rules
+the expansion of a pre-terminal to a word, and internal rules, which express theInternal rule
+other rule expansions. We need to distinguish these kinds of rules in a lexicalized
+grammar because they are associated with very different kinds of probabilities. The
+lexical rules are deterministic, that is, they have probability 1.0 since a lexicalized
+pre-terminal like NN(bin,NN) can only expand to the word bin. But for the internal
+rules, we need to estimate probabilities.
+
+
+
+16 CHAPTER 13 • STATISTICAL PARSING
+
+Suppose we were to treat a probabilistic lexicalized CFG like a really big CFG
+that just happened to have lots of very complex non-terminals and estimate the
+probabilities for each rule from maximum likelihood estimates. Thus, according
+to Eq. 13.18, the MLE estimate for the probability for the rule P(VP(dumped,VBD)
+? VBD(dumped, VBD) NP(sacks,NNS) PP(into,P)) would be
+
+Count(VP(dumped,VBD)? VBD(dumped, VBD) NP(sacks,NNS) PP(into,P))
+Count(VP(dumped,VBD))
+
+(13.23)
+
+But there’s no way we can get good estimates of counts like those in (13.23)
+because they are so specific: we’re unlikely to see many (or even any) instances of a
+sentence with a verb phrase headed by dumped that has one NP argument headed by
+sacks and a PP argument headed by into. In other words, counts of fully lexicalized
+PCFG rules like this will be far too sparse, and most rule probabilities will come out
+0.
+
+The idea of lexicalized parsing is to make some further independence assump-
+tions to break down each rule so that we would estimate the probability
+
+P(VP(dumped,VBD)? VBD(dumped, VBD) NP(sacks,NNS) PP(into,P))
+
+as the product of smaller independent probability estimates for which we could
+acquire reasonable counts. The next section summarizes one such method, the
+Collins parsing method.
+
+13.6.1 The Collins Parser
+Modern statistical parsers differ in exactly which independence assumptions they
+make. In this section we describe a simplified version of Collins’s worth knowing
+about; see the summary at the end of the chapter.
+
+The first intuition of the Collins parser is to think of the right-hand side of every
+(internal) CFG rule as consisting of a head non-terminal, together with the non-
+terminals to the left of the head and the non-terminals to the right of the head. In the
+abstract, we think about these rules as follows:
+
+LHS? Ln Ln?1 ...L1 H R1 ...Rn?1 Rn (13.24)
+
+Since this is a lexicalized grammar, each of the symbols like L1 or R3 or H or
+LHS is actually a complex symbol representing the category and its head and head
+tag, like VP(dumped,VP) or NP(sacks,NNS).
+
+Now, instead of computing a single MLE probability for this rule, we are going
+to break down this rule via a neat generative story, a slight simplification of what is
+called Collins Model 1. This new generative story is that given the left-hand side,
+we first generate the head of the rule and then generate the dependents of the head,
+one by one, from the inside out. Each of these generation steps will have its own
+probability.
+
+We also add a special STOP non-terminal at the left and right edges of the rule;
+this non-terminal allows the model to know when to stop generating dependents on a
+given side. We generate dependents on the left side of the head until we’ve generated
+STOP on the left side of the head, at which point we move to the right side of the
+head and start generating dependents there until we generate STOP. So it’s as if we
+
+
+
+13.6 • PROBABILISTIC LEXICALIZED CFGS 17
+
+are generating a rule augmented as follows:
+
+P(VP(dumped,VBD)? (13.25)
+STOP VBD(dumped, VBD) NP(sacks,NNS) PP(into,P) STOP)
+
+Let’s see the generative story for this augmented rule. We make use of three
+kinds of probabilities: PH for generating heads, PL for generating dependents on the
+left, and PR for generating dependents on the right.
+
+1. Generate the head VBD(dumped,VBD) with probability
+P(H|LHS) = P(VBD(dumped,VBD) | VP(dumped,VBD))
+
+VP(dumped,VBD)
+
+VBD(dumped,VBD)
+
+2. Generate the left dependent (which is STOP, since there isn’t
+one) with probability
+P(STOP| VP(dumped,VBD) VBD(dumped,VBD))
+
+VP(dumped,VBD)
+
+VBD(dumped,VBD)STOP
+
+3. Generate right dependent NP(sacks,NNS) with probability
+Pr(NP(sacks,NNS| VP(dumped,VBD), VBD(dumped,VBD))
+
+VP(dumped,VBD)
+
+NP(sacks,NNS)VBD(dumped,VBD)STOP
+
+4. Generate the right dependent PP(into,P) with probability
+Pr(PP(into,P) | VP(dumped,VBD), VBD(dumped,VBD))
+
+VP(dumped,VBD)
+
+PP(into,P)NP(sacks,NNS)VBD(dumped,VBD)STOP
+
+5) Generate the right dependent STOP with probability
+Pr(STOP | VP(dumped,VBD), VBD(dumped,VBD))
+
+VP(dumped,VBD)
+
+STOPPP(into,P)NP(sacks,NNS)VBD(dumped,VBD)STOP
+
+In summary, the probability of this rule
+
+P(VP(dumped,VBD)? (13.26)
+VBD(dumped, VBD) NP(sacks,NNS) PP(into,P))
+
+is estimated as
+
+PH (VBD|VP, dumped) × PL(STOP|VP,VBD,dumped) (13.27)
+× PR(NP(sacks,NNS)|VP,VBD,dumped)
+× PR(PP(into,P)|VP,VBD,dumped)
+× PR(STOP|VP,VBD,dumped)
+
+Each of these probabilities can be estimated from much smaller amounts of data
+than the full probability in (13.26). For example, the maximum likelihood estimate
+
+
+
+18 CHAPTER 13 • STATISTICAL PARSING
+
+for the component probability PR(NP(sacks,NNS)|VP,VBD,dumped) is
+
+Count( VP(dumped,VBD) with NNS(sacks)as a daughter somewhere on the right )
+Count( VP(dumped,VBD) )
+
+(13.28)
+These counts are much less subject to sparsity problems than are complex counts
+like those in (13.26).
+
+More generally, if H is a head with head word hw and head tag ht, lw/lt and
+rw/rt are the word/tag on the left and right respectively, and P is the parent, then the
+probability of an entire rule can be expressed as follows:
+
+1. Generate the head of the phrase H(hw,ht) with probability:
+
+PH(H(hw,ht)|P,hw,ht)
+
+2. Generate modifiers to the left of the head with total probability
+
+n+1?
+i=1
+
+PL(Li(lwi, lti)|P,H,hw,ht)
+
+such that Ln+1(lwn+1, ltn+1) =STOP, and we stop generating once we’ve gen-
+erated a STOP token.
+
+3. Generate modifiers to the right of the head with total probability:
+
+n+1?
+i=1
+
+PP(Ri(rwi,rti)|P,H,hw,ht)
+
+such that Rn+1(rwn+1,rtn+1) = STOP, and we stop generating once we’ve
+generated a STOP token.
+
+13.6.2 Advanced: Further Details of the Collins Parser
+The actual Collins parser models are more complex (in a couple of ways) than the
+simple model presented in the previous section. Collins Model 1 includes a distanceDistance
+feature. Thus, instead of computing PL and PR as follows,
+
+PL(Li(lwi, lti)|P,H,hw,ht) (13.29)
+PR(Ri(rwi,rti)|P,H,hw,ht) (13.30)
+
+Collins Model 1 conditions also on a distance feature:
+
+PL(Li(lwi, lti)|P,H,hw,ht,distanceL(i?1)) (13.31)
+PR(Ri(rwi,rti)|P,H,hw,ht,distanceR(i?1)) (13.32)
+
+The distance measure is a function of the sequence of words below the previous
+modifiers (i.e., the words that are the yield of each modifier non-terminal we have
+already generated on the left).
+
+The simplest version of this distance measure is just a tuple of two binary fea-
+tures based on the surface string below these previous dependencies: (1) Is the string
+of length zero? (i.e., were no previous words generated?) (2) Does the string contain
+a verb?
+
+
+
+13.7 • PROBABILISTIC CCG PARSING 19
+
+Collins Model 2 adds more sophisticated features, conditioning on subcatego-
+rization frames for each verb and distinguishing arguments from adjuncts.
+
+Finally, smoothing is as important for statistical parsers as it was for N-gram
+models. This is particularly true for lexicalized parsers, since the lexicalized rules
+will otherwise condition on many lexical items that may never occur in training
+(even using the Collins or other methods of independence assumptions).
+
+Consider the probability PR(Ri(rwi,rti)|P,hw,ht). What do we do if a particular
+right-hand constituent never occurs with this head? The Collins model addresses this
+problem by interpolating three backed-off models: fully lexicalized (conditioning on
+the headword), backing off to just the head tag, and altogether unlexicalized.
+
+Backoff PR(Ri(rwi,rti|...) Example
+1 PR(Ri(rwi,rti)|P,hw,ht) PR(NP(sacks,NNS)|VP, VBD, dumped)
+2 PR(Ri(rwi,rti)|P,ht) PR(NP(sacks,NNS)|V P,V BD)
+3 PR(Ri(rwi,rti)|P) PR(NP(sacks,NNS)|V P)
+
+Similar backoff models are built also for PL and PH . Although we’ve used the
+word “backoff”, in fact these are not backoff models but interpolated models. The
+three models above are linearly interpolated, where e1, e2, and e3 are the maximum
+likelihood estimates of the three backoff models above:
+
+PR(...) = ?1e1 +(1??1)(?2e2 +(1??2)e3) (13.33)
+The values of ?1and?2 are set to implement Witten-Bell discounting (Witten and
+
+Bell, 1991) following Bikel et al. (1997).
+The Collins model deals with unknown words by replacing any unknown word
+
+in the test set, and any word occurring less than six times in the training set, with a
+special UNKNOWN word token. Unknown words in the test set are assigned a part-
+of-speech tag in a preprocessing step by the Ratnaparkhi (1996) tagger; all other
+words are tagged as part of the parsing process.
+
+The parsing algorithm for the Collins model is an extension of probabilistic
+CKY; see Collins (2003). Extending the CKY algorithm to handle basic lexical-
+ized probabilities is left as Exercises 14.5 and 14.6 for the reader.
+
+13.7 Probabilistic CCG Parsing
+
+Lexicalized grammar frameworks such as CCG pose problems for which the phrase-
+based methods we’ve been discussing are not particularly well-suited. To quickly
+review, CCG consists of three major parts: a set of categories, a lexicon that asso-
+ciates words with categories, and a set of rules that govern how categories combine
+in context. Categories can be either atomic elements, such as S and NP, or functions
+such as (S\NP)/NP which specifies the transitive verb category. Rules specify how
+functions, their arguments, and other functions combine. For example, the following
+rule templates, forward and backward function application, specify the way that
+functions apply to their arguments.
+
+X/Y Y ? X
+Y X\Y ? X
+
+The first rule applies a function to its argument on the right, while the second
+looks to the left for its argument. The result of applying either of these rules is the
+
+
+
+20 CHAPTER 13 • STATISTICAL PARSING
+
+category specified as the value of the function being applied. For the purposes of
+this discussion, we’ll rely on these two rules along with the forward and backward
+composition rules and type-raising, as described in Chapter 11.
+
+13.7.1 Ambiguity in CCG
+
+As is always the case in parsing, managing ambiguity is the key to successful CCG
+parsing. The difficulties with CCG parsing arise from the ambiguity caused by the
+large number of complex lexical categories combined with the very general nature of
+the grammatical rules. To see some of the ways that ambiguity arises in a categorial
+framework, consider the following example.
+
+(13.34) United diverted the flight to Reno.
+
+Our grasp of the role of the flight in this example depends on whether the prepo-
+sitional phrase to Reno is taken as a modifier of the flight, as a modifier of the entire
+verb phrase, or as a potential second argument to the verb divert. In a context-free
+grammar approach, this ambiguity would manifest itself as a choice among the fol-
+lowing rules in the grammar.
+
+Nominal ? Nominal PP
+VP ? VP PP
+VP ? Verb NP PP
+
+In a phrase-structure approach we would simply assign the word to to the cate-
+gory P allowing it to combine with Reno to form a prepositional phrase. The sub-
+sequent choice of grammar rules would then dictate the ultimate derivation. In the
+categorial approach, we can associate to with distinct categories to reflect the ways
+in which it might interact with other elements in a sentence. The fairly abstract
+combinatoric rules would then sort out which derivations are possible. Therefore,
+the source of ambiguity arises not from the grammar but rather from the lexicon.
+
+Let’s see how this works by considering several possible derivations for this
+example. To capture the case where the prepositional phrase to Reno modifies the
+flight, we assign the preposition to the category (NP\NP)/NP, which gives rise to
+the following derivation.
+
+United diverted the flight to Reno
+
+NP (S\NP)/NP NP/N N (NP\NP)/NP NP
+> >
+
+NP NP\NP
+<
+
+NP
+>
+
+S\NP
+<
+
+S
+
+Here, the category assigned to to expects to find two arguments: one to the right as
+with a traditional preposition, and one to the left that corresponds to the NP to be
+modified.
+
+Alternatively, we could assign to to the category (S\S)/NP, which permits the
+following derivation where to Reno modifies the preceding verb phrase.
+
+
+
+13.7 • PROBABILISTIC CCG PARSING 21
+
+United diverted the flight to Reno
+
+NP (S\NP)/NP NP/N N (S\S)/NP NP
+> >
+
+NP S\S
+>
+
+S\NP
+<B
+
+S\NP
+<
+
+S
+
+A third possibility is to view divert as a ditransitive verb by assigning it to the
+category ((S\NP)/PP)/NP, while treating to Reno as a simple prepositional phrase.
+
+United diverted the flight to Reno
+
+NP ((S\NP)/PP)/NP NP/N N PP/NP NP
+> >
+
+NP PP
+>
+
+(S\NP)/PP
+>
+
+S\NP
+<
+
+S
+
+While CCG parsers are still subject to ambiguity arising from the choice of
+grammar rules, including the kind of spurious ambiguity discussed in Chapter 11,
+it should be clear that the choice of lexical categories is the primary problem to be
+addressed in CCG parsing.
+
+13.7.2 CCG Parsing Frameworks
+Since the rules in combinatory grammars are either binary or unary, a bottom-up,
+tabular approach based on the CKY algorithm should be directly applicable to CCG
+parsing. Recall from Fig. 13.3 that PCKY employs a table that records the location,
+category and probability of all valid constituents discovered in the input. Given an
+appropriate probability model for CCG derivations, the same kind of approach can
+work for CCG parsing.
+
+Unfortunately, the large number of lexical categories available for each word,
+combined with the promiscuity of CCG’s combinatoric rules, leads to an explosion
+in the number of (mostly useless) constituents added to the parsing table. The key
+to managing this explosion of zombie constituents is to accurately assess and ex-
+ploit the most likely lexical categories possible for each word — a process called
+supertagging.
+
+The following sections describe two approaches to CCG parsing that make use of
+supertags. Section 13.7.4, presents an approach that structures the parsing process
+as a heuristic search through the use of the A* algorithm. The following section
+then briefly describes a more traditional maximum entropy approach that manages
+the search space complexity through the use of adaptive supertagging — a process
+that iteratively considers more and more tags until a parse is found.
+
+13.7.3 Supertagging
+Chapter 10 introduced the task of part-of-speech tagging, the process of assigning
+the correct lexical category to each word in a sentence. Supertagging is the corre-Supertagging
+sponding task for highly lexicalized grammar frameworks, where the assigned tags
+
+
+
+22 CHAPTER 13 • STATISTICAL PARSING
+
+often dictate much of the derivation for a sentence. Indeed, ) refer to supertagging
+as almost parsing.
+
+CCG supertaggers rely on treebanks such as CCGbank to provide both the over-
+all set of lexical categories as well as the allowable category assignments for each
+word in the lexicon. CCGbank includes over 1000 lexical categories, however, in
+practice, most supertaggers limit their tagsets to those tags that occur at least 10
+times in the training corpus. This results in an overall total of around 425 lexical
+categories available for use in the lexicon. Note that even this smaller number is
+large in contrast to the 45 POS types used by the Penn Treebank tagset.
+
+As with traditional part-of-speech tagging, the standard approach to building a
+CCG supertagger is to use supervised machine learning to build a sequence classi-
+fier using labeled training data. A common approach is to use the maximum entropy
+Markov model (MEMM), as described in Chapter 10, to find the most likely se-
+quence of tags given a sentence. The features in such a model consist of the current
+word wi, its surrounding words within l words wi+li?l , as well as the k previously as-
+signed supertags t i?1i?k . This type of model is summarized in the following equation
+from Chapter 10. Training by maximizing log-likelihood of the training corpus and
+decoding via the Viterbi algorithm are the same as described in Chapter 10.
+
+T? = argmax
+T
+
+P(T |W )
+
+= argmax
+T
+
+?
+i
+
+P(ti|wi+li?l , t
+i?1
+i?k )
+
+= argmax
+T
+
+?
+i
+
+exp
+
+(?
+i
+
+wi fi(ti,wi+li?l , t
+i?1
+i?k )
+
+)
+?
+
+t ??tagset
+exp
+
+(?
+i
+
+wi fi(t ?,wi+li?l , t
+i?1
+i?k )
+
+) (13.35)
+Word and tag-based features with k and l both set to 2 provides reasonable results
+given sufficient training data. Additional features such as POS tags and short char-
+acter suffixes are also commonly used to improve performance.
+
+Unfortunately, even with additional features the large number of possible su-
+pertags combined with high per-word ambiguity leads to error rates that are too
+high for practical use in a parser. More specifically, the single best tag sequence
+T? will typically contain too many incorrect tags for effective parsing to take place.
+To overcome this, we can instead return a probability distribution over the possible
+supertags for each word in the input. The following table illustrates an example dis-
+tribution for a simple example sentence. In this table, each column represents the
+probability of each supertag for a given word in the context of the input sentence.
+The “...” represent all the remaining supertags possible for each word.
+
+United serves Denver
+N/N: 0.4 (S\NP)/NP: 0.8 NP: 0.9
+NP: 0.3 N: 0.1 N/N: 0.05
+S/S: 0.1 ... ...
+S\S: .05
+
+...
+
+In a MEMM framework, the probability of the optimal tag sequence defined in
+Eq. 13.35 is efficiently computed with a suitably modified version of the Viterbi
+
+
+
+13.7 • PROBABILISTIC CCG PARSING 23
+
+algorithm. However, since Viterbi only finds the single best tag sequence it doesn’t
+provide exactly what we need here; we need to know the probability of each possible
+word/tag pair. The probability of any given tag for a word is the sum of the probabil-
+ities of all the supertag sequences that contain that tag at that location. Fortunately,
+we’ve seen this problem before — a table representing these values can be com-
+puted efficiently by using a version of the forward-backward algorithm presented in
+Chapter 9.
+
+The same result can also be achieved through the use of deep learning approaches
+based on recurrent neural networks (RNNs). Recent efforts have demonstrated con-
+siderable success with RNNs as alternatives to HMM-based methods. These ap-
+proaches differ from traditional classifier-based methods in the following ways:
+
+• The use of vector-based word representations (embeddings) rather than word-
+based feature functions.
+
+• Input representations that span the entire sentence, as opposed to size-limited
+sliding windows.
+
+• Avoiding the use of high-level features, such as part of speech tags, since
+errors in tag assignment can propagate to errors in supertags.
+
+As with the forward-backward algorithm, RNN-based methods can provide a prob-
+ability distribution over the lexical categories for each word in the input.
+
+13.7.4 CCG Parsing using the A* Algorithm
+The A* algorithm is a heuristic search method that employs an agenda to find an
+optimal solution. Search states representing partial solutions are added to an agenda
+based on a cost function, with the least-cost option being selected for further ex-
+ploration at each iteration. When a state representing a complete solution is first
+selected from the agenda, it is guaranteed to be optimal and the search terminates.
+
+The A* cost function, f (n), is used to efficiently guide the search to a solution.
+The f -cost has two components: g(n), the exact cost of the partial solution repre-
+sented by the state n, and h(n) a heuristic approximation of the cost of a solution
+that makes use of n. When h(n) satisfies the criteria of not overestimating the actual
+cost, A* will find an optimal solution. Not surprisingly, the closer the heuristic can
+get to the actual cost, the more effective A* is at finding a solution without having
+to explore a significant portion of the solution space.
+
+When applied to parsing, search states correspond to edges representing com-
+pleted constituents. As with the PCKY algorithm, edges specify a constituent’s start
+and end positions, its grammatical category, and its f -cost. Here, the g component
+represents the current cost of an edge and the h component represents an estimate
+of the cost to complete a derivation that makes use of that edge. The use of A*
+for phrase structure parsing originated with (Klein and Manning, 2003a), while the
+CCG approach presented here is based on (Lewis and Steedman, 2014).
+
+Using information from a supertagger, an agenda and a parse table are initial-
+ized with states representing all the possible lexical categories for each word in the
+input, along with their f -costs. The main loop removes the lowest cost edge from
+the agenda and tests to see if it is a complete derivation. If it reflects a complete
+derivation it is selected as the best solution and the loop terminates. Otherwise, new
+states based on the applicable CCG rules are generated, assigned costs, and entered
+into the agenda to await further processing. The loop continues until a complete
+derivation is discovered, or the agenda is exhausted, indicating a failed parse. The
+algorithm is given in Fig. 13.11.
+
+
+
+24 CHAPTER 13 • STATISTICAL PARSING
+
+function CCG-ASTAR-PARSE(words) returns table or failure
+
+supertags?SUPERTAGGER(words)
+for i? from 1 to LENGTH(words) do
+
+for all {A | (words[i], A, score) ? supertags}
+edge?MAKEEDGE(i?1, i, A, score)
+table? INSERTEDGE(table, edge)
+agenda? INSERTEDGE(agenda, edge)
+
+loop do
+if EMPTY?(agenda) return failure
+current?POP(agenda)
+if COMPLETEDPARSE?(current) return table
+table? INSERTEDGE(chart, edge)
+for each rule in APPLICABLERULES(edge) do
+
+successor?APPLY(rule, edge)
+if successor not ? in agenda or chart
+
+agenda? INSERTEDGE(agenda, successor)
+else if successor ? agenda with higher cost
+
+agenda?REPLACEEDGE(agenda, successor)
+
+Figure 13.11 A*-based CCG parsing.
+
+Heuristic Functions
+
+Before we can define a heuristic function for our A* search, we need to decide how
+to assess the quality of CCG derivations. For the generic PCFG model, we defined
+the probability of a tree as the product of the probability of the rules that made up
+the tree. Given CCG’s lexical nature, we’ll make the simplifying assumption that the
+probability of a CCG derivation is just the product of the probability of the supertags
+assigned to the words in the derivation, ignoring the rules used in the the derivation.
+More formally, given a sentence S and derivation D that contains suptertag sequence
+T , we have:
+
+P(D,S) = P(T,S) (13.36)
+
+=
+
+n?
+i=1
+
+P(ti|si) (13.37)
+
+To better fit with the traditional A* approach, we’d prefer to have states scored
+by a cost function where lower is better (i.e., we’re trying to minimize the cost of
+a derivation). To achieve this, we’ll use negative log probabilities to score deriva-
+tions; this results in the following equation, which we’ll use to score completed CCG
+derivations.
+
+P(D,S) = P(T,S) (13.38)
+
+=
+
+n?
+i=1
+
+? logP(ti|si) (13.39)
+
+Given this model, we can define our f -cost as follows. The f -cost of an edge is
+the sum of two components: g(n), the cost of the span represented by the edge, and
+
+
+
+13.7 • PROBABILISTIC CCG PARSING 25
+
+h(n), the estimate of the cost to complete a derivation containing that edge (these
+are often referred to as the inside and outside costs). We’ll define g(n) for an edge
+using Equation 13.39. That is, it is just the sum of the costs of the supertags that
+comprise the span.
+
+For h(n), we need a score that approximates but never overestimates the actual
+cost of the final derivation. A simple heuristic that meets this requirement assumes
+that each of the words in the outside span will be assigned its most probable su-
+pertag. If these are the tags used in the final derivation, then its score will equal
+the heuristic. If any other tags are used in the final derivation the f -cost will be
+higher since the new tags must have higher costs, thus guaranteeing that we will not
+overestimate.
+
+Putting this all together, we arrive at the following definition of a suitable f -cost
+for an edge.
+
+f (wi, j, ti, j) = g(wi, j)+h(wi, j) (13.40)
+
+=
+
+j?
+k=i
+
+? logP(tk|wk)+
+
+i?1?
+k=1
+
+max
+t?tags
+
+(? logP(t|wk))+
+N?
+
+k= j+1
+
+max
+t?tags
+
+(? logP(t|wk))
+
+As an example, consider an edge representing the word serves with the supertag
+N in the following example.
+
+(13.41) United serves Denver.
+
+The g-cost for this edge is just the negative log probability of the tag, or X. The
+outside h-cost consists of the most optimistic supertag assignments for United and
+Denver. The resulting f -cost for this edge is therefore x+y+z = 1.494.
+
+An Example
+
+Fig. 13.12 shows the initial agenda and the progress of a complete parse for this
+example. After initializing the agenda and the parse table with information from the
+supertagger, it selects the best edge from the agenda — the entry for United with
+the tag N/N and f -cost 0.591. This edge does not constitute a complete parse and is
+therefore used to generate new states by applying all the relevant grammar rules. In
+this case, applying forward application to United: N/N and serves: N results in the
+creation of the edge United serves: N[0,2], 1.795 to the agenda.
+
+Skipping ahead, at the the third iteration an edge representing the complete
+derivation United serves Denver, S[0,3], .716 is added to the agenda. However,
+the algorithm does not terminate at this point since the cost of this edge (.716) does
+not place it at the top of the agenda. Instead, the edge representing Denver with the
+category NP is popped. This leads to the addition of another edge to the agenda
+(type-raising Denver). Only after this edge is popped and dealt with does the ear-
+lier state representing a complete derivation rise to the top of the agenda where it is
+popped, goal tested, and returned as a solution.
+
+The effectiveness of the A* approach is reflected in the coloring of the states
+in Fig. 13.12 as well as the final parsing table. The edges shown in blue (includ-
+ing all the initial lexical category assignments not explicitly shown) reflect states in
+the search space that never made it to the top of the agenda and, therefore, never
+
+
+
+26 CHAPTER 13 • STATISTICAL PARSING
+
+United serves: N[0,2]
+1.795
+
+United: N/N
+.591
+
+Denver: N/N
+2.494
+
+Denver: N
+1.795
+
+serves: N
+1.494
+
+United: S\S
+1.494
+
+United: S/S
+1.1938
+
+United: NP
+.716
+
+Denver: NP
+.591
+
+serves: (S\NP)/NP
+.591
+
+serves Denver: S\NP[1,3]
+.591
+
+United serves Denver: S[0,3]
+.716
+
+Denver: S/(S\NP)[0,1]
+.591
+
+1
+
+2 3
+
+4 5
+
+6
+
+Initial 
+Agenda
+
+Goal State
+
+…
+
+S: 0.716
+
+S/NP: 0.591
+
+United serves
+
+[0,1] [0,2] [0,3]
+
+[1,2] [1,3]
+
+[2,3]
+
+N/N: 0.591
+NP: 0.716
+S/S: 1.1938
+S\S: 1.494
+…
+
+Denver
+
+(S\NP)/NP: 0.591
+N: 1.494
+…
+
+NP: 0.591
+N: 1.795
+N/N: 2.494
+…
+
+N: 1.795
+
+Figure 13.12 Example of an A* search for the example “United serves Denver”. The circled numbers on the
+white boxes indicate the order in which the states are popped from the agenda. The costs in each state are based
+on f-costs using negative log10 probabilities.
+
+contributed any edges to the final table. This is in contrast to the PCKY approach
+where the parser systematically fills the parse table with all possible constituents for
+all possible spans in the input, filling the table with myriad constituents that do not
+contribute to the final analysis.
+
+
+
+13.8 • EVALUATING PARSERS 27
+
+13.8 Evaluating Parsers
+
+The standard techniques for evaluating parsers and grammars are called the PAR-
+SEVAL measures; they were proposed by Black et al. (1991) and were based on
+the same ideas from signal-detection theory that we saw in earlier chapters. The
+intuition of the PARSEVAL metric is to measure how much the constituents in the
+hypothesis parse tree look like the constituents in a hand-labeled, gold-reference
+parse. PARSEVAL thus assumes we have a human-labeled “gold standard” parse
+tree for each sentence in the test set; we generally draw these gold-standard parses
+from a treebank like the Penn Treebank.
+
+Given these gold-standard reference parses for a test set, a given constituent in
+a hypothesis parse Ch of a sentence s is labeled “correct” if there is a constituent in
+the reference parse Cr with the same starting point, ending point, and non-terminal
+symbol.
+
+We can then measure the precision and recall just as we did for chunking in the
+previous chapter.
+
+labeled recall: = # of correct constituents in hypothesis parse of s# of correct constituents in reference parse of s
+
+labeled precision: = # of correct constituents in hypothesis parse of s# of total constituents in hypothesis parse of s
+
+As with other uses of precision and recall, instead of reporting them separately,
+we often report a single number, the F-measure (van Rijsbergen, 1975): The F-F-measure
+measure is defined as
+
+F? =
+(? 2 +1)PR
+
+? 2P+R
+
+The ? parameter differentially weights the importance of recall and precision,
+based perhaps on the needs of an application. Values of ? > 1 favor recall and values
+of ? < 1 favor precision. When ? = 1, precision and recall are equally balanced;
+this is sometimes called F?=1 or just F1:
+
+F1 =
+2PR
+
+P+R
+(13.42)
+
+The F-measure derives from a weighted harmonic mean of precision and recall.
+Remember that the harmonic mean of a set of numbers is the reciprocal of the arith-
+metic mean of the reciprocals:
+
+HarmonicMean(a1,a2,a3,a4, ...,an) =
+n
+
+1
+a1
++ 1a2 +
+
+1
+a3
++ ...+ 1an
+
+(13.43)
+
+and hence the F-measure is
+
+F =
+1
+
+? 1P +(1??)
+1
+R
+
+or
+(
+
+with ? 2 =
+1??
+
+?
+
+)
+F =
+
+(? 2 +1)PR
+? 2P+R
+
+(13.44)
+
+We additionally use a new metric, crossing brackets, for each sentence s:
+
+cross-brackets: the number of constituents for which the reference parse has a
+bracketing such as ((A B) C) but the hypothesis parse has a bracketing such
+as (A (B C)).
+
+
+
+28 CHAPTER 13 • STATISTICAL PARSING
+
+As of the time of this writing, the performance of modern parsers that are trained
+and tested on the Wall Street Journal treebank was somewhat higher than 90% recall,
+90% precision, and about 1% cross-bracketed constituents per sentence.
+
+For comparing parsers that use different grammars, the PARSEVAL metric in-
+cludes a canonicalization algorithm for removing information likely to be grammar-
+specific (auxiliaries, pre-infinitival “to”, etc.) and for computing a simplified score.
+The interested reader should see Black et al. (1991). The canonical publicly avail-
+able implementation of the PARSEVAL metrics is called evalb (Sekine and Collins,evalb
+1997).
+
+Nonetheless, phrasal constituents are not always an appropriate unit for parser
+evaluation. In lexically-oriented grammars, such as CCG and LFG, the ultimate
+goal is to extract the appropriate predicate-argument relations or grammatical de-
+pendencies, rather than a specific derivation. Such relations often give us a better
+metric for how useful a parser output will be for further semantic processing. For
+these purposes, we can use alternative evaluation metrics based on measuring the
+precision and recall of labeled dependencies, where the labels indicate the gram-
+matical relations (Lin, 1995; Carroll et al., 1998; Collins et al., 1999). Indeed, the
+parsing model of Clark and Curran (2007) presented in Section ?? incorporates a
+dependency model as part of its training objective function.
+
+Such evaluation metrics also allow us to compare parsers developed using differ-
+ent grammatical frameworks by converting their outputs to a common neutral rep-
+resentation. Kaplan et al. (2004), for example, compared the Collins (1999) parser
+with the Xerox XLE parser (Riezler et al., 2002), which produces much richer se-
+mantic representations by converting both parse trees to a dependency representa-
+tion.
+
+Finally, you might wonder why we don’t evaluate parsers by measuring how
+many sentences are parsed correctly instead of measuring component accuracy in
+the form of constituents or dependencies. The reason we use components is that it
+gives us a more fine-grained metric. This is especially true for long sentences, where
+most parsers don’t get a perfect parse. If we just measured sentence accuracy, we
+wouldn’t be able to distinguish between a parse that got most of the parts wrong and
+one that just got one part wrong.
+
+13.9 Human Parsing
+
+Are the kinds of probabilistic parsing models we have been discussing also used by
+humans when they are parsing? The answer to this question lies in a field called
+human sentence processing. Recent studies suggest that there are at least two
+
+Human
+sentence
+
+processing
+ways in which humans apply probabilistic parsing algorithms, although there is still
+disagreement on the details.
+
+One family of studies has shown that when humans read, the predictability of a
+word seems to influence the reading time; more predictable words are read moreReading time
+quickly. One way of defining predictability is from simple bigram measures. For
+example, Scott and Shillcock (2003) used an eye-tracker to monitor the gaze of
+participants reading sentences. They constructed the sentences so that some would
+have a verb-noun pair with a high bigram probability (such as (13.45a)) and others
+a verb-noun pair with a low bigram probability (such as (13.45b)).
+
+(13.45) a) HIGH PROB: One way to avoid confusion is to make the changes
+
+
+
+13.9 • HUMAN PARSING 29
+
+during vacation
+b) LOW PROB: One way to avoid discovery is to make the changes
+
+during vacation
+
+They found that the higher the bigram predictability of a word, the shorter the
+time that participants looked at the word (the initial-fixation duration).
+
+While this result provides evidence only for N-gram probabilities, more recent
+experiments have suggested that the probability of an upcoming word given the syn-
+tactic parse of the preceding sentence prefix also predicts word reading time (Hale,
+2001; Levy, 2008).
+
+Interestingly, this effect of probability on reading time has also been shown for
+morphological structure; the time to recognize a word is influenced by entropy of
+the word and the entropy of the word’s morphological paradigm (Moscoso del Prado
+Mart??n et al., 2004).
+
+The second family of studies has examined how humans disambiguate sentences
+that have multiple possible parses, suggesting that humans prefer whichever parse
+is more probable. These studies often rely on a specific class of temporarily am-
+biguous sentences called garden-path sentences. These sentences, first describedGarden-path
+by Bever (1970), are sentences that are cleverly constructed to have three properties
+that combine to make them very difficult for people to parse:
+
+1. They are temporarily ambiguous: The sentence is unambiguous, but its ini-
+tial portion is ambiguous.
+
+2. One of the two or more parses in the initial portion is somehow preferable to
+the human parsing mechanism.
+
+3. But the dispreferred parse is the correct one for the sentence.
+
+The result of these three properties is that people are “led down the garden path”
+toward the incorrect parse and then are confused when they realize it’s the wrong
+one. Sometimes this confusion is quite conscious, as in Bever’s example (13.46);
+in fact, this sentence is so hard to parse that readers often need to be shown the
+correct structure. In the correct structure, raced is part of a reduced relative clause
+modifying The horse, and means “The horse [which was raced past the barn] fell”;
+this structure is also present in the sentence “Students taught by the Berlitz method
+do worse when they get to France”.
+
+(13.46) The horse raced past the barn fell.
+
+(a) S
+
+VP
+
+PP
+
+NP
+
+N
+
+barn
+
+Det
+
+the
+
+P
+
+past
+
+V
+
+raced
+
+NP
+
+N
+
+horse
+
+Det
+
+The
+
+?
+
+V
+
+fell
+
+(b) S
+
+VP
+
+V
+
+fell
+
+NP
+
+VP
+
+PP
+
+NP
+
+N
+
+barn
+
+Det
+
+the
+
+P
+
+past
+
+V
+
+raced
+
+NP
+
+N
+
+horse
+
+Det
+
+The
+
+
+
+30 CHAPTER 13 • STATISTICAL PARSING
+
+In Marti Hearst’s example (13.47), readers often misparse the verb houses as a
+noun (analyzing the complex houses as a noun phrase, rather than a noun phrase and
+a verb). Other times, the confusion caused by a garden-path sentence is so subtle
+that it can only be measured by a slight increase in reading time. Thus, in (13.48)
+readers often misparse the solution as the direct object of forgot rather than as the
+subject of an embedded sentence. This misparse is subtle, and is only noticeable
+because experimental participants take longer to read the word was than in control
+sentences. This “mini garden path” effect at the word was suggests that subjects had
+chosen the direct object parse and had to reanalyze or rearrange their parse now that
+they realize they are in a sentential complement.
+
+(13.47) The complex houses married and single students and their families.
+
+S
+
+NP
+
+N
+
+houses
+
+Adj
+
+complex
+
+Det
+
+The
+
+S
+
+VP
+
+V
+
+houses
+
+NP
+
+N
+
+complex
+
+Det
+
+The
+
+(13.48) The student forgot the solution was in the back of the book.
+
+S
+
+VP
+
+NP
+
+N
+
+solution
+
+Det
+
+the
+
+V
+
+forgot
+
+NP
+
+N
+
+students
+
+Det
+
+The
+
+S
+
+VP
+
+S
+
+VP
+
+V
+
+was
+
+NP
+
+N
+
+solution
+
+Det
+
+the
+
+V
+
+forgot
+
+NP
+
+N
+
+students
+
+Det
+
+The
+
+While many factors seem to play a role in these preferences for a particular (in-
+correct) parse, at least one factor seems to be syntactic probabilities, especially lex-
+icalized (subcategorization) probabilities. For example, the probability of the verb
+forgot taking a direct object (VP? V NP) is higher than the probability of it taking a
+sentential complement (VP? V S); this difference causes readers to expect a direct
+object after forget and be surprised (longer reading times) when they encounter a
+sentential complement. By contrast, a verb which prefers a sentential complement
+(like hope) didn’t cause extra reading time at was.
+
+The garden path in (13.47) may arise from the fact that P(houses|Noun) is higher
+than P(houses|Verb) and P(complex|Adjective) is higher than P(complex|Noun),
+and the garden path in (13.46) at least partially caused by the low probability of the
+reduced relative clause construction.
+
+Besides grammatical knowledge, human parsing is affected by many other fac-
+tors including resource constraints (such as memory limitations, thematic structure
+
+
+
+13.10 • SUMMARY 31
+
+(such as whether a verb expects semantic agents or patients, discussed in Chapter 22)
+and discourse constraints (Chapter 23).
+
+13.10 Summary
+
+This chapter has sketched the basics of probabilistic parsing, concentrating on
+probabilistic context-free grammars and probabilistic lexicalized context-free
+grammars.
+
+• Probabilistic grammars assign a probability to a sentence or string of words
+while attempting to capture more sophisticated syntactic information than the
+N-gram grammars of Chapter 4.
+
+• A probabilistic context-free grammar (PCFG) is a context-free
+grammar in which every rule is annotated with the probability of that rule
+being chosen. Each PCFG rule is treated as if it were conditionally inde-
+pendent; thus, the probability of a sentence is computed by multiplying the
+probabilities of each rule in the parse of the sentence.
+
+• The probabilistic CKY (Cocke-Kasami-Younger) algorithm is a probabilistic
+version of the CKY parsing algorithm. There are also probabilistic versions
+of other parsers like the Earley algorithm.
+
+• PCFG probabilities can be learned by counting in a parsed corpus or by pars-
+ing a corpus. The inside-outside algorithm is a way of dealing with the fact
+that the sentences being parsed are ambiguous.
+
+• Raw PCFGs suffer from poor independence assumptions among rules and lack
+of sensitivity to lexical dependencies.
+
+• One way to deal with this problem is to split and merge non-terminals (auto-
+matically or by hand).
+
+• Probabilistic lexicalized CFGs are another solution to this problem in which
+the basic PCFG model is augmented with a lexical head for each rule. The
+probability of a rule can then be conditioned on the lexical head or nearby
+heads.
+
+• Parsers for lexicalized PCFGs (like the Charniak and Collins parsers) are
+based on extensions to probabilistic CKY parsing.
+
+• Parsers are evaluated with three metrics: labeled recall, labeled precision,
+and cross-brackets.
+
+• Evidence from garden-path sentences and other on-line sentence-processing
+experiments suggest that the human parser uses some kinds of probabilistic
+information about grammar.
+
+Bibliographical and Historical Notes
+Many of the formal properties of probabilistic context-free grammars were first
+worked out by Booth (1969) and Salomaa (1969). Baker (1979) proposed the inside-
+outside algorithm for unsupervised training of PCFG probabilities, and used a CKY-
+style parsing algorithm to compute inside probabilities. Jelinek and Lafferty (1991)
+
+
+
+32 CHAPTER 13 • STATISTICAL PARSING
+
+extended the CKY algorithm to compute probabilities for prefixes. Stolcke (1995)
+drew on both of these algorithms in adapting the Earley algorithm to use with
+PCFGs.
+
+A number of researchers starting in the early 1990s worked on adding lexical de-
+pendencies to PCFGs and on making PCFG rule probabilities more sensitive to sur-
+rounding syntactic structure. For example, Schabes et al. (1988) and Schabes (1990)
+presented early work on the use of heads. Many papers on the use of lexical depen-
+dencies were first presented at the DARPA Speech and Natural Language Workshop
+in June 1990. A paper by Hindle and Rooth (1990) applied lexical dependencies
+to the problem of attaching prepositional phrases; in the question session to a later
+paper, Ken Church suggested applying this method to full parsing (Marcus, 1990).
+Early work on such probabilistic CFG parsing augmented with probabilistic depen-
+dency information includes Magerman and Marcus (1991), Black et al. (1992), Bod
+(1993), and Jelinek et al. (1994), in addition to Collins (1996), Charniak (1997), and
+Collins (1999) discussed above. Other recent PCFG parsing models include Klein
+and Manning (2003a) and Petrov et al. (2006).
+
+This early lexical probabilistic work led initially to work focused on solving
+specific parsing problems like preposition-phrase attachment by using methods in-
+cluding transformation-based learning (TBL) (Brill and Resnik, 1994), maximum
+entropy (Ratnaparkhi et al., 1994), memory-based Learning (Zavrel and Daelemans,
+1997), log-linear models (Franz, 1997), decision trees that used semantic distance
+between heads (computed from WordNet) (Stetina and Nagao, 1997), and boosting
+(Abney et al., 1999).
+
+Another direction extended the lexical probabilistic parsing work to build prob-
+abilistic formulations of grammars other than PCFGs, such as probabilistic TAG
+grammar (Resnik 1992, Schabes 1992), based on the TAG grammars discussed in
+Chapter 11, probabilistic LR parsing (Briscoe and Carroll, 1993), and probabilistic
+link grammar (Lafferty et al., 1992). An approach to probabilistic parsing called
+supertagging extends the part-of-speech tagging metaphor to parsing by using verySupertagging
+complex tags that are, in fact, fragments of lexicalized parse trees (Bangalore and
+Joshi 1999, Joshi and Srinivas 1994), based on the lexicalized TAG grammars of
+Schabes et al. (1988). For example, the noun purchase would have a different tag
+as the first noun in a noun compound (where it might be on the left of a small tree
+dominated by Nominal) than as the second noun (where it might be on the right).
+
+Goodman (1997), Abney (1997), and Johnson et al. (1999) gave early discus-
+sions of probabilistic treatments of feature-based grammars. Other recent work
+on building statistical models of feature-based grammar formalisms like HPSG and
+LFG includes (Riezler et al. 2002, Kaplan et al. 2004), and Toutanova et al. (2005).
+
+We mentioned earlier that discriminative approaches to parsing fall into the two
+broad categories of dynamic programming methods and discriminative reranking
+methods. Recall that discriminative reranking approaches require N-best parses.
+Parsers based on A* search can easily be modified to generate N-best lists just by
+continuing the search past the first-best parse (Roark, 2001). Dynamic programming
+algorithms like the ones described in this chapter can be modified by the elimina-
+tion of the dynamic programming with heavy pruning (Collins 2000, Collins and
+Koo 2005, Bikel 2004), or through new algorithms (Jime?nez and Marzal 2000,Char-
+niak and Johnson 2005,Huang and Chiang 2005), some adapted from speech recog-
+nition algorithms such as those of Schwartz and Chow (1990) (see Section ??).
+
+In dynamic programming methods, instead of outputting and then reranking an
+N-best list, the parses are represented compactly in a chart, and log-linear and other
+
+
+
+EXERCISES 33
+
+methods are applied for decoding directly from the chart. Such modern methods
+include (Johnson 2001, Clark and Curran 2004), and Taskar et al. (2004). Other
+reranking developments include changing the optimization criterion (Titov and Hen-
+derson, 2006).
+
+Collins’ (1999) dissertation includes a very readable survey of the field and an
+introduction to his parser. Manning and Schu?tze (1999) extensively cover proba-
+bilistic parsing.
+
+The field of grammar induction is closely related to statistical parsing, and a
+parser is often used as part of a grammar induction algorithm. One of the earliest
+statistical works in grammar induction was Horning (1969), who showed that PCFGs
+could be induced without negative evidence. Early modern probabilistic grammar
+work showed that simply using EM was insufficient (Lari and Young 1990, Carroll
+and Charniak 1992). Recent probabilistic work, such as Yuret (1998), Clark (2001),
+Klein and Manning (2002), and Klein and Manning (2004), are summarized in Klein
+(2005) and Adriaans and van Zaanen (2004). Work since that summary includes
+Smith and Eisner (2005), Haghighi and Klein (2006), and Smith and Eisner (2007).
+
+Exercises
+13.1 Implement the CKY algorithm.
+
+13.2 Modify the algorithm for conversion to CNF from Chapter 12 to correctly
+handle rule probabilities. Make sure that the resulting CNF assigns the same
+total probability to each parse tree.
+
+13.3 Recall that Exercise 13.3 asked you to update the CKY algorithm to han-
+dle unit productions directly rather than converting them to CNF. Extend this
+change to probabilistic CKY.
+
+13.4 Fill out the rest of the probabilistic CKY chart in Fig. ??.
+
+13.5 Sketch how the CKY algorithm would have to be augmented to handle lexi-
+calized probabilities.
+
+13.6 Implement your lexicalized extension of the CKY algorithm.
+
+13.7 Implement the PARSEVAL metrics described in Section 13.8. Next, either
+use a treebank or create your own hand-checked parsed test set. Now use your
+CFG (or other) parser and grammar, parse the test set and compute labeled
+recall, labeled precision, and cross-brackets.
+
+
+
+34 Chapter 13 • Statistical Parsing
+
+Abney, S. P. (1997). Stochastic attribute-value grammars.
+Computational Linguistics, 23(4), 597–618.
+
+Abney, S. P., Schapire, R. E., and Singer, Y. (1999). Boosting
+applied to tagging and PP attachment. In EMNLP/VLC-99,
+College Park, MD, pp. 38–45.
+
+Adriaans, P. and van Zaanen, M. (2004). Computational
+grammar induction for linguists. Grammars; special issue
+with the theme “Grammar Induction”, 7, 57–68.
+
+Baker, J. K. (1979). Trainable grammars for speech recog-
+nition. In Klatt, D. H. and Wolf, J. J. (Eds.), Speech Com-
+munication Papers for the 97th Meeting of the Acoustical
+Society of America, pp. 547–550.
+
+Bangalore, S. and Joshi, A. K. (1999). Supertagging: An
+approach to almost parsing. Computational Linguistics,
+25(2), 237–265.
+
+Bever, T. G. (1970). The cognitive basis for linguistic struc-
+tures. In Hayes, J. R. (Ed.), Cognition and the Development
+of Language, pp. 279–352. Wiley.
+
+Bikel, D. M. (2004). Intricacies of Collins’ parsing model.
+Computational Linguistics, 30(4), 479–511.
+
+Bikel, D. M., Miller, S., Schwartz, R., and Weischedel,
+R. (1997). Nymble: A high-performance learning name-
+finder. In ANLP 1997, pp. 194–201.
+
+Black, E., Abney, S. P., Flickinger, D., Gdaniec, C., Grish-
+man, R., Harrison, P., Hindle, D., Ingria, R., Jelinek, F.,
+Klavans, J. L., Liberman, M. Y., Marcus, M. P., Roukos,
+S., Santorini, B., and Strzalkowski, T. (1991). A procedure
+for quantitatively comparing the syntactic coverage of En-
+glish grammars. In Proceedings DARPA Speech and Natu-
+ral Language Workshop, Pacific Grove, CA, pp. 306–311.
+
+Black, E., Jelinek, F., Lafferty, J. D., Magerman, D. M.,
+Mercer, R. L., and Roukos, S. (1992). Towards history-
+based grammars: Using richer models for probabilistic
+parsing. In Proceedings DARPA Speech and Natural Lan-
+guage Workshop, Harriman, NY, pp. 134–139.
+
+Bod, R. (1993). Using an annotated corpus as a stochastic
+grammar. In EACL-93, pp. 37–44.
+
+Booth, T. L. (1969). Probabilistic representation of formal
+languages. In IEEE Conference Record of the 1969 Tenth
+Annual Symposium on Switching and Automata Theory, pp.
+74–81.
+
+Booth, T. L. and Thompson, R. A. (1973). Applying prob-
+ability measures to abstract languages. IEEE Transactions
+on Computers, C-22(5), 442–450.
+
+Bresnan, J. (Ed.). (1982). The Mental Representation of
+Grammatical Relations. MIT Press.
+
+Brill, E. and Resnik, P. (1994). A rule-based approach
+to prepositional phrase attachment disambiguation. In
+COLING-94, Kyoto, pp. 1198–1204.
+
+Briscoe, T. and Carroll, J. (1993). Generalized probabilistic
+LR parsing of natural language (corpora) with unification-
+based grammars. Computational Linguistics, 19(1), 25–59.
+
+Carroll, G. and Charniak, E. (1992). Two experiments on
+learning probabilistic dependency grammars from corpora.
+Tech. rep. CS-92-16, Brown University.
+
+Carroll, J., Briscoe, T., and Sanfilippo, A. (1998). Parser
+evaluation: A survey and a new proposal. In LREC-98,
+Granada, Spain, pp. 447–454.
+
+Charniak, E. (1997). Statistical parsing with a context-free
+grammar and word statistics. In AAAI-97, pp. 598–603.
+AAAI Press.
+
+Charniak, E. and Johnson, M. (2005). Coarse-to-fine n-best
+parsing and MaxEnt discriminative reranking. In ACL-05,
+Ann Arbor.
+
+Chelba, C. and Jelinek, F. (2000). Structured language mod-
+eling. Computer Speech and Language, 14, 283–332.
+
+Clark, A. (2001). The unsupervised induction of stochastic
+context-free grammars using distributional clustering. In
+CoNLL-01.
+
+Clark, S. and Curran, J. R. (2004). Parsing the WSJ using
+CCG and log-linear models. In ACL-04, pp. 104–111.
+
+Clark, S. and Curran, J. R. (2007). Wide-coverage efficient
+statistical parsing with ccg and log-linear models. Compu-
+tational. Linguistics, 33(4), 493–552.
+
+Collins, M. (1996). A new statistical parser based on bi-
+gram lexical dependencies. In ACL-96, Santa Cruz, CA,
+pp. 184–191.
+
+Collins, M. (1999). Head-Driven Statistical Models for Nat-
+ural Language Parsing. Ph.D. thesis, University of Penn-
+sylvania, Philadelphia.
+
+Collins, M. (2000). Discriminative reranking for natural lan-
+guage parsing. In ICML 2000, Stanford, CA, pp. 175–182.
+
+Collins, M. (2003). Head-driven statistical models for nat-
+ural language parsing. Computational Linguistics, 29(4),
+589–637.
+
+Collins, M., Hajic?, J., Ramshaw, L. A., and Tillmann, C.
+(1999). A statistical parser for Czech. In ACL-99, College
+Park, MA, pp. 505–512.
+
+Collins, M. and Koo, T. (2005). Discriminative reranking
+for natural language parsing. Computational Linguistics,
+31(1), 25–69.
+
+Francis, H. S., Gregory, M. L., and Michaelis, L. A. (1999).
+Are lexical subjects deviant?. In CLS-99. University of
+Chicago.
+
+Franz, A. (1997). Independence assumptions considered
+harmful. In ACL/EACL-97, Madrid, Spain, pp. 182–189.
+
+Givo?n, T. (1990). Syntax: A Functional Typological Intro-
+duction. John Benjamins.
+
+Goodman, J. (1997). Probabilistic feature grammars. In
+IWPT-97.
+
+Haghighi, A. and Klein, D. (2006). Prototype-driven gram-
+mar induction. In COLING/ACL 2006, pp. 881–888.
+
+Hale, J. (2001). A probabilistic earley parser as a psycholin-
+guistic model. In NAACL 2001, pp. 159–166.
+
+Hindle, D. and Rooth, M. (1990). Structural ambiguity and
+lexical relations. In Proceedings DARPA Speech and Natu-
+ral Language Workshop, Hidden Valley, PA, pp. 257–262.
+
+Hindle, D. and Rooth, M. (1991). Structural ambiguity and
+lexical relations. In ACL-91, Berkeley, CA, pp. 229–236.
+
+Horning, J. J. (1969). A Study of Grammatical Inference.
+Ph.D. thesis, Stanford University.
+
+Huang, L. and Chiang, D. (2005). Better k-best parsing. In
+IWPT-05, pp. 53–64.
+
+Jelinek, F. and Lafferty, J. D. (1991). Computation of
+the probability of initial substring generation by stochastic
+context-free grammars. Computational Linguistics, 17(3),
+315–323.
+
+
+
+Exercises 35
+
+Jelinek, F., Lafferty, J. D., Magerman, D. M., Mercer, R. L.,
+Ratnaparkhi, A., and Roukos, S. (1994). Decision tree pars-
+ing using a hidden derivation model. In ARPA Human Lan-
+guage Technologies Workshop, Plainsboro, N.J., pp. 272–
+277.
+
+Jime?nez, V. M. and Marzal, A. (2000). Computation of the
+n best parse trees for weighted and stochastic context-free
+grammars. In Advances in Pattern Recognition: Proceed-
+ings of the Joint IAPR International Workshops, SSPR 2000
+and SPR 2000, Alicante, Spain, pp. 183–192. Springer.
+
+Johnson, M. (1998). PCFG models of linguistic tree repre-
+sentations. Computational Linguistics, 24(4), 613–632.
+
+Johnson, M. (2001). Joint and conditional estimation of tag-
+ging and parsing models. In ACL-01, pp. 314–321.
+
+Johnson, M., Geman, S., Canon, S., Chi, Z., and Riezler, S.
+(1999). Estimators for stochastic “unification-based” gram-
+mars. In ACL-99, pp. 535–541.
+
+Joshi, A. K. (1985). Tree adjoining grammars: How much
+context-sensitivity is required to provide reasonable struc-
+tural descriptions?. In Dowty, D. R., Karttunen, L., and
+Zwicky, A. (Eds.), Natural Language Parsing, pp. 206–
+250. Cambridge University Press.
+
+Joshi, A. K. and Srinivas, B. (1994). Disambiguation of
+super parts of speech (or supertags): Almost parsing. In
+COLING-94, Kyoto, pp. 154–160.
+
+Kaplan, R. M., Riezler, S., King, T. H., Maxwell III, J. T.,
+Vasserman, A., and Crouch, R. (2004). Speed and accuracy
+in shallow and deep stochastic parsing. In HLT-NAACL-04.
+
+Klein, D. (2005). The Unsupervised Learning of Natural
+Language Structure. Ph.D. thesis, Stanford University.
+
+Klein, D. and Manning, C. D. (2001). Parsing and hyper-
+graphs. In IWPT-01, pp. 123–134.
+
+Klein, D. and Manning, C. D. (2002). A generative
+constituent-context model for improved grammar induc-
+tion. In ACL-02.
+
+Klein, D. and Manning, C. D. (2003a). A* parsing: Fast
+exact Viterbi parse selection. In HLT-NAACL-03.
+
+Klein, D. and Manning, C. D. (2003b). Accurate unlexical-
+ized parsing. In HLT-NAACL-03.
+
+Klein, D. and Manning, C. D. (2004). Corpus-based induc-
+tion of syntactic structure: Models of dependency and con-
+stituency. In ACL-04, pp. 479–486.
+
+Lafferty, J. D., Sleator, D., and Temperley, D. (1992). Gram-
+matical trigrams: A probabilistic model of link grammar.
+In Proceedings of the 1992 AAAI Fall Symposium on Prob-
+abilistic Approaches to Natural Language.
+
+Lari, K. and Young, S. J. (1990). The estimation of stochastic
+context-free grammars using the Inside-Outside algorithm.
+Computer Speech and Language, 4, 35–56.
+
+Levy, R. (2008). Expectation-based syntactic comprehen-
+sion. Cognition, 106(3), 1126–1177.
+
+Lewis, M. and Steedman, M. (2014). A* ccg parsing with a
+supertag-factored model.. In EMNLP, pp. 990–1000.
+
+Lin, D. (1995). A dependency-based method for evaluating
+broad-coverage parsers. In IJCAI-95, Montreal, pp. 1420–
+1425.
+
+Magerman, D. M. and Marcus, M. P. (1991). Pearl: A prob-
+abilistic chart parser. In EACL-91, Berlin.
+
+Manning, C. D. and Schu?tze, H. (1999). Foundations of Sta-
+tistical Natural Language Processing. MIT Press.
+
+Marcus, M. P. (1990). Summary of session 9: Automatic
+acquisition of linguistic structure. In Proceedings DARPA
+Speech and Natural Language Workshop, Hidden Valley,
+PA, pp. 249–250.
+
+Marcus, M. P., Santorini, B., and Marcinkiewicz, M. A.
+(1993). Building a large annotated corpus of English: The
+Penn treebank. Computational Linguistics, 19(2), 313–
+330.
+
+Moscoso del Prado Mart??n, F., Kostic, A., and Baayen, R. H.
+(2004). Putting the bits together: An information theoret-
+ical perspective on morphological processing. Cognition,
+94(1), 1–18.
+
+Ney, H. (1991). Dynamic programming parsing for context-
+free grammars in continuous speech recognition. IEEE
+Transactions on Signal Processing, 39(2), 336–340.
+
+Petrov, S., Barrett, L., Thibaux, R., and Klein, D. (2006).
+Learning accurate, compact, and interpretable tree annota-
+tion. In COLING/ACL 2006, Sydney, Australia, pp. 433–
+440.
+
+Pollard, C. and Sag, I. A. (1994). Head-Driven Phrase Struc-
+ture Grammar. University of Chicago Press.
+
+Ratnaparkhi, A. (1996). A maximum entropy part-of-speech
+tagger. In EMNLP 1996, Philadelphia, PA, pp. 133–142.
+
+Ratnaparkhi, A., Reynar, J. C., and Roukos, S. (1994). A
+maximum entropy model for prepositional phrase attach-
+ment. In ARPA Human Language Technologies Workshop,
+Plainsboro, N.J., pp. 250–255.
+
+Resnik, P. (1992). Probabilistic tree-adjoining grammar as
+a framework for statistical natural language processing. In
+COLING-92, Nantes, France, pp. 418–424.
+
+Riezler, S., King, T. H., Kaplan, R. M., Crouch, R.,
+Maxwell III, J. T., and Johnson, M. (2002). Parsing
+the Wall Street Journal using a Lexical-Functional Gram-
+mar and discriminative estimation techniques. In ACL-02,
+Philadelphia, PA.
+
+Roark, B. (2001). Probabilistic top-down parsing and lan-
+guage modeling. Computational Linguistics, 27(2), 249–
+276.
+
+Salomaa, A. (1969). Probabilistic and weighted grammars.
+Information and Control, 15, 529–544.
+
+Schabes, Y. (1990). Mathematical and Computational As-
+pects of Lexicalized Grammars. Ph.D. thesis, University of
+Pennsylvania, Philadelphia, PA.
+
+Schabes, Y. (1992). Stochastic lexicalized tree-adjoining
+grammars. In COLING-92, Nantes, France, pp. 426–433.
+
+Schabes, Y., Abeille?, A., and Joshi, A. K. (1988). Pars-
+ing strategies with ‘lexicalized’ grammars: Applications to
+Tree Adjoining Grammars. In COLING-88, Budapest, pp.
+578–583.
+
+Schwartz, R. and Chow, Y.-L. (1990). The N-best algorithm:
+An efficient and exact procedure for finding the N most
+likely sentence hypotheses. In ICASSP-90, Vol. 1, pp. 81–
+84.
+
+Scott, M. and Shillcock, R. (2003). Eye movements re-
+veal the on-line computation of lexical probabilities during
+reading. Psychological Science, 14(6), 648–652.
+
+
+
+36 Chapter 13 • Statistical Parsing
+
+Sekine, S. and Collins, M. (1997). The evalb
+software. http://cs.nyu.edu/cs/projects/
+proteus/evalb.
+
+Smith, D. A. and Eisner, J. (2007). Bootstrapping
+feature-rich dependency parsers with entropic priors. In
+EMNLP/CoNLL 2007, Prague, pp. 667–677.
+
+Smith, N. A. and Eisner, J. (2005). Guiding unsupervised
+grammar induction using contrastive estimation. In IJCAI
+Workshop on Grammatical Inference Applications, Edin-
+burgh, pp. 73–82.
+
+Stetina, J. and Nagao, M. (1997). Corpus based PP attach-
+ment ambiguity resolution with a semantic dictionary. In
+Zhou, J. and Church, K. W. (Eds.), Proceedings of the Fifth
+Workshop on Very Large Corpora, Beijing, China, pp. 66–
+80.
+
+Stolcke, A. (1995). An efficient probabilistic context-free
+parsing algorithm that computes prefix probabilities. Com-
+putational Linguistics, 21(2), 165–202.
+
+Taskar, B., Klein, D., Collins, M., Koller, D., and Manning,
+C. D. (2004). Max-margin parsing. In EMNLP 2004, pp.
+1–8.
+
+Titov, I. and Henderson, J. (2006). Loss minimization in
+parse reranking. In EMNLP 2006.
+
+Toutanova, K., Manning, C. D., Flickinger, D., and Oepen,
+S. (2005). Stochastic HPSG Parse Disambiguation using
+the Redwoods Corpus. Research on Language & Compu-
+tation, 3(1), 83–105.
+
+van Rijsbergen, C. J. (1975). Information Retrieval. Butter-
+worths.
+
+Witten, I. H. and Bell, T. C. (1991). The zero-frequency
+problem: Estimating the probabilities of novel events in
+adaptive text compression. IEEE Transactions on Informa-
+tion Theory, 37(4), 1085–1094.
+
+Yuret, D. (1998). Discovery of Linguistic Relations Using
+Lexical Attraction. Ph.D. thesis, MIT.
+
+Zavrel, J. and Daelemans, W. (1997). Memory-based learn-
+ing: Using similarity for smoothing. In ACL/EACL-97,
+Madrid, Spain, pp. 436–443.
+
+http://cs.nyu.edu/cs/projects/proteus/evalb
+http://cs.nyu.edu/cs/projects/proteus/evalb
+
+	Statistical Parsing
+	Probabilistic Context-Free Grammars
+	PCFGs for Disambiguation
+	PCFGs for Language Modeling
+
+	Probabilistic CKY Parsing of PCFGs
+	Ways to Learn PCFG Rule Probabilities
+	Problems with PCFGs
+	Independence Assumptions Miss Structural Dependencies Between Rules
+	Lack of Sensitivity to Lexical Dependencies
+
+	Improving PCFGs by Splitting Non-Terminals
+	Probabilistic Lexicalized CFGs
+	The Collins Parser
+	Advanced: Further Details of the Collins Parser
+
+	Probabilistic CCG Parsing
+	Ambiguity in CCG
+	CCG Parsing Frameworks
+	Supertagging
+	CCG Parsing using the A* Algorithm
+
+	Evaluating Parsers
+	Human Parsing
+	Summary
+	Bibliographical and Historical Notes
+	Exercises
+
+

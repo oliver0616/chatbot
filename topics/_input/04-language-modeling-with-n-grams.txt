@@ -1,0 +1,2073 @@
+
+Speech and Language Processing. Daniel Jurafsky & James H. Martin. Copyright c© 2016. All
+rights reserved. Draft of August 7, 2017.
+
+CHAPTER
+
+4 Language Modeling with N-grams
+“You are uniformly charming!” cried he, with a smile of associating and now
+and then I bowed and they perceived a chaise and four to wish for.
+
+Random sentence generated from a Jane Austen trigram model
+
+Being able to predict the future is not always a good thing. Cassandra of Troy had
+the gift of foreseeing but was cursed by Apollo that her predictions would never be
+believed. Her warnings of the destruction of Troy were ignored and to simplify, let’s
+just say that things just didn’t go well for her later.
+
+In this chapter we take up the somewhat less fraught topic of predicting words.
+What word, for example, is likely to follow
+
+Please turn your homework ...
+
+Hopefully, most of you concluded that a very likely word is in, or possibly over,
+but probably not refrigerator or the. In the following sections we will formalize
+this intuition by introducing models that assign a probability to each possible next
+word. The same models will also serve to assign a probability to an entire sentence.
+Such a model, for example, could predict that the following sequence has a much
+higher probability of appearing in a text:
+
+all of a sudden I notice three guys standing on the sidewalk
+
+than does this same set of words in a different order:
+
+on guys all I of notice sidewalk three a sudden standing the
+
+Why would you want to predict upcoming words, or assign probabilities to sen-
+tences? Probabilities are essential in any task in which we have to identify words
+in noisy, ambiguous input, like speech recognition or handwriting recognition. In
+the movie Take the Money and Run, Woody Allen tries to rob a bank with a sloppily
+written hold-up note that the teller incorrectly reads as “I have a gub”. As Rus-
+sell and Norvig (2002) point out, a language processing system could avoid making
+this mistake by using the knowledge that the sequence “I have a gun” is far more
+probable than the non-word “I have a gub” or even “I have a gull”.
+
+In spelling correction, we need to find and correct spelling errors like Their
+are two midterms in this class, in which There was mistyped as Their. A sentence
+starting with the phrase There are will be much more probable than one starting with
+Their are, allowing a spellchecker to both detect and correct these errors.
+
+Assigning probabilities to sequences of words is also essential in machine trans-
+lation. Suppose we are translating a Chinese source sentence:
+
+? ? ?? ??? ?? ??
+He to reporters introduced main content
+
+
+
+2 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+As part of the process we might have built the following set of potential rough
+English translations:
+
+he introduced reporters to the main contents of the statement
+he briefed to reporters the main contents of the statement
+he briefed reporters on the main contents of the statement
+
+A probabilistic model of word sequences could suggest that briefed reporters on
+is a more probable English phrase than briefed to reporters (which has an awkward
+to after briefed) or introduced reporters to (which uses a verb that is less fluent
+English in this context), allowing us to correctly select the boldfaced sentence above.
+
+Probabilities are also important for augmentative communication (Newell et al.,
+1998) systems. People like the physicist Stephen Hawking who are unable to physi-
+cally talk or sign can instead use simple movements to select words from a menu to
+be spoken by the system. Word prediction can be used to suggest likely words for
+the menu.
+
+Models that assign probabilities to sequences of words are called language mod-
+els or LMs. In this chapter we introduce the simplest model that assigns probabilitieslanguage model
+
+LM to sentences and sequences of words, the N-gram. An N-gram is a sequence of N
+N-gram words: a 2-gram (or bigram) is a two-word sequence of words like “please turn”,
+
+“turn your”, or ”your homework”, and a 3-gram (or trigram) is a three-word se-
+quence of words like “please turn your”, or “turn your homework”. We’ll see how
+to use N-gram models to estimate the probability of the last word of an N-gram
+given the previous words, and also to assign probabilities to entire sequences. In
+a bit of terminological ambiguity, we usually drop the word “model”, and thus the
+term N-gram is used to mean either the word sequence itself or the predictive model
+that assigns it a probability.
+
+Whether estimating probabilities of next words or of whole sequences, the N-
+gram model is one of the most important tools in speech and language processing.
+
+4.1 N-Grams
+
+Let’s begin with the task of computing P(w|h), the probability of a word w given
+some history h. Suppose the history h is “its water is so transparent that” and we
+want to know the probability that the next word is the:
+
+P(the|its water is so transparent that). (4.1)
+
+One way to estimate this probability is from relative frequency counts: take a
+very large corpus, count the number of times we see its water is so transparent that,
+and count the number of times this is followed by the. This would be answering the
+question “Out of the times we saw the history h, how many times was it followed by
+the word w”, as follows:
+
+P(the|its water is so transparent that) =
+C(its water is so transparent that the)
+
+C(its water is so transparent that)
+(4.2)
+
+With a large enough corpus, such as the web, we can compute these counts and
+estimate the probability from Eq. 4.2. You should pause now, go to the web, and
+compute this estimate for yourself.
+
+
+
+4.1 • N-GRAMS 3
+
+While this method of estimating probabilities directly from counts works fine in
+many cases, it turns out that even the web isn’t big enough to give us good estimates
+in most cases. This is because language is creative; new sentences are created all the
+time, and we won’t always be able to count entire sentences. Even simple extensions
+of the example sentence may have counts of zero on the web (such as “Walden
+Pond’s water is so transparent that the”).
+
+Similarly, if we wanted to know the joint probability of an entire sequence of
+words like its water is so transparent, we could do it by asking “out of all possible
+sequences of five words, how many of them are its water is so transparent?” We
+would have to get the count of its water is so transparent and divide by the sum of
+the counts of all possible five word sequences. That seems rather a lot to estimate!
+
+For this reason, we’ll need to introduce cleverer ways of estimating the proba-
+bility of a word w given a history h, or the probability of an entire word sequence W .
+Let’s start with a little formalizing of notation. To represent the probability of a par-
+ticular random variable Xi taking on the value “the”, or P(Xi = “the”), we will use
+the simplification P(the). We’ll represent a sequence of N words either as w1 . . .wn
+or wn1. For the joint probability of each word in a sequence having a particular value
+P(X = w1,Y = w2,Z = w3, ...,W = wn) we’ll use P(w1,w2, ...,wn).
+
+Now how can we compute probabilities of entire sequences like P(w1,w2, ...,wn)?
+One thing we can do is decompose this probability using the chain rule of proba-
+bility:
+
+P(X1...Xn) = P(X1)P(X2|X1)P(X3|X21 ) . . .P(Xn|Xn?11 )
+
+=
+
+n?
+k=1
+
+P(Xk|Xk?11 ) (4.3)
+
+Applying the chain rule to words, we get
+
+P(wn1) = P(w1)P(w2|w1)P(w3|w21) . . .P(wn|wn?11 )
+
+=
+
+n?
+k=1
+
+P(wk|wk?11 ) (4.4)
+
+The chain rule shows the link between computing the joint probability of a se-
+quence and computing the conditional probability of a word given previous words.
+Equation 4.4 suggests that we could estimate the joint probability of an entire se-
+quence of words by multiplying together a number of conditional probabilities. But
+using the chain rule doesn’t really seem to help us! We don’t know any way to
+compute the exact probability of a word given a long sequence of preceding words,
+P(wn|wn?11 ). As we said above, we can’t just estimate by counting the number of
+times every word occurs following every long string, because language is creative
+and any particular context might have never occurred before!
+
+The intuition of the N-gram model is that instead of computing the probability
+of a word given its entire history, we can approximate the history by just the last
+few words.
+
+The bigram model, for example, approximates the probability of a word givenbigram
+all the previous words P(wn|wn?11 ) by using only the conditional probability of the
+preceding word P(wn|wn?1). In other words, instead of computing the probability
+
+P(the|Walden Pond’s water is so transparent that) (4.5)
+
+
+
+4 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+we approximate it with the probability
+
+P(the|that) (4.6)
+
+When we use a bigram model to predict the conditional probability of the next
+word, we are thus making the following approximation:
+
+P(wn|wn?11 )? P(wn|wn?1) (4.7)
+
+The assumption that the probability of a word depends only on the previous word
+is called a Markov assumption. Markov models are the class of probabilistic modelsMarkov
+that assume we can predict the probability of some future unit without looking too
+far into the past. We can generalize the bigram (which looks one word into the past)
+to the trigram (which looks two words into the past) and thus to the N-gram (whichN-gram
+looks N?1 words into the past).
+
+Thus, the general equation for this N-gram approximation to the conditional
+probability of the next word in a sequence is
+
+P(wn|wn?11 )? P(wn|w
+n?1
+n?N+1) (4.8)
+
+Given the bigram assumption for the probability of an individual word, we can
+compute the probability of a complete word sequence by substituting Eq. 4.7 into
+Eq. 4.4:
+
+P(wn1)?
+n?
+
+k=1
+
+P(wk|wk?1) (4.9)
+
+How do we estimate these bigram or N-gram probabilities? An intuitive way to
+estimate probabilities is called maximum likelihood estimation or MLE. We get
+
+maximum
+likelihood
+estimation
+
+the MLE estimate for the parameters of an N-gram model by getting counts from a
+corpus, and normalizing the counts so that they lie between 0 and 1.1normalize
+
+For example, to compute a particular bigram probability of a word y given a
+previous word x, we’ll compute the count of the bigram C(xy) and normalize by the
+sum of all the bigrams that share the same first word x:
+
+P(wn|wn?1) =
+C(wn?1wn)?
+
+w C(wn?1w)
+(4.10)
+
+We can simplify this equation, since the sum of all bigram counts that start with
+a given word wn?1 must be equal to the unigram count for that word wn?1 (the reader
+should take a moment to be convinced of this):
+
+P(wn|wn?1) =
+C(wn?1wn)
+
+C(wn?1)
+(4.11)
+
+Let’s work through an example using a mini-corpus of three sentences. We’ll
+first need to augment each sentence with a special symbol <s> at the beginning
+of the sentence, to give us the bigram context of the first word. We’ll also need a
+special end-symbol. </s>2
+
+1 For probabilistic models, normalizing means dividing by some total count so that the resulting prob-
+abilities fall legally between 0 and 1.
+2 We need the end-symbol to make the bigram grammar a true probability distribution. Without an
+end-symbol, the sentence probabilities for all sentences of a given length would sum to one. This model
+would define an infinite set of probability distributions, with one distribution per sentence length. See
+Exercise 4.5.
+
+
+
+4.1 • N-GRAMS 5
+
+<s> I am Sam </s>
+
+<s> Sam I am </s>
+
+<s> I do not like green eggs and ham </s>
+
+Here are the calculations for some of the bigram probabilities from this corpus
+
+P(I|<s>) = 23 = .67 P(Sam|<s>) =
+1
+3 = .33 P(am|I) =
+
+2
+3 = .67
+
+P(</s>|Sam) = 12 = 0.5 P(Sam|am) =
+1
+2 = .5 P(do|I) =
+
+1
+3 = .33
+
+For the general case of MLE N-gram parameter estimation:
+
+P(wn|wn?1n?N+1) =
+C(wn?1n?N+1wn)
+
+C(wn?1n?N+1)
+(4.12)
+
+Equation 4.12 (like Eq. 4.11) estimates the N-gram probability by dividing the
+observed frequency of a particular sequence by the observed frequency of a prefix.
+This ratio is called a relative frequency. We said above that this use of relativerelativefrequency
+frequencies as a way to estimate probabilities is an example of maximum likelihood
+estimation or MLE. In MLE, the resulting parameter set maximizes the likelihood
+of the training set T given the model M (i.e., P(T |M)). For example, suppose the
+word Chinese occurs 400 times in a corpus of a million words like the Brown corpus.
+What is the probability that a random word selected from some other text of, say,
+a million words will be the word Chinese? The MLE of its probability is 4001000000
+or .0004. Now .0004 is not the best possible estimate of the probability of Chinese
+occurring in all situations; it might turn out that in some other corpus or context
+Chinese is a very unlikely word. But it is the probability that makes it most likely
+that Chinese will occur 400 times in a million-word corpus. We present ways to
+modify the MLE estimates slightly to get better probability estimates in Section 4.4.
+
+Let’s move on to some examples from a slightly larger corpus than our 14-word
+example above. We’ll use data from the now-defunct Berkeley Restaurant Project,
+a dialogue system from the last century that answered questions about a database
+of restaurants in Berkeley, California (Jurafsky et al., 1994). Here are some text-
+normalized sample user queries (a sample of 9332 sentences is on the website):
+
+can you tell me about any good cantonese restaurants close by
+mid priced thai food is what i’m looking for
+tell me about chez panisse
+can you give me a listing of the kinds of food that are available
+i’m looking for a good place to eat breakfast
+when is caffe venezia open during the day
+
+Figure 4.1 shows the bigram counts from a piece of a bigram grammar from the
+Berkeley Restaurant Project. Note that the majority of the values are zero. In fact,
+we have chosen the sample words to cohere with each other; a matrix selected from
+a random set of seven words would be even more sparse.
+
+Figure 4.2 shows the bigram probabilities after normalization (dividing each cell
+in Fig. 4.1 by the appropriate unigram for its row, taken from the following set of
+unigram probabilities):
+
+i want to eat chinese food lunch spend
+2533 927 2417 746 158 1093 341 278
+
+Here are a few other useful probabilities:
+
+
+
+6 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+i want to eat chinese food lunch spend
+i 5 827 0 9 0 0 0 2
+want 2 0 608 1 6 6 5 1
+to 2 0 4 686 2 0 6 211
+eat 0 0 2 0 16 2 42 0
+chinese 1 0 0 0 0 82 1 0
+food 15 0 15 0 1 4 0 0
+lunch 2 0 0 0 0 1 0 0
+spend 1 0 1 0 0 0 0 0
+
+Figure 4.1 Bigram counts for eight of the words (out of V = 1446) in the Berkeley Restau-
+rant Project corpus of 9332 sentences. Zero counts are in gray.
+
+i want to eat chinese food lunch spend
+i 0.002 0.33 0 0.0036 0 0 0 0.00079
+want 0.0022 0 0.66 0.0011 0.0065 0.0065 0.0054 0.0011
+to 0.00083 0 0.0017 0.28 0.00083 0 0.0025 0.087
+eat 0 0 0.0027 0 0.021 0.0027 0.056 0
+chinese 0.0063 0 0 0 0 0.52 0.0063 0
+food 0.014 0 0.014 0 0.00092 0.0037 0 0
+lunch 0.0059 0 0 0 0 0.0029 0 0
+spend 0.0036 0 0.0036 0 0 0 0 0
+
+Figure 4.2 Bigram probabilities for eight words in the Berkeley Restaurant Project corpus
+of 9332 sentences. Zero probabilities are in gray.
+
+P(i|<s>) = 0.25 P(english|want) = 0.0011
+P(food|english) = 0.5 P(</s>|food) = 0.68
+
+Now we can compute the probability of sentences like I want English food or
+I want Chinese food by simply multiplying the appropriate bigram probabilities to-
+gether, as follows:
+
+P(<s> i want english food </s>)
+
+= P(i|<s>)P(want|i)P(english|want)
+
+P(food|english)P(</s>|food)
+
+= .25× .33× .0011×0.5×0.68
+= = .000031
+
+We leave it as Exercise 4.2 to compute the probability of i want chinese food.
+What kinds of linguistic phenomena are captured in these bigram statistics?
+
+Some of the bigram probabilities above encode some facts that we think of as strictly
+syntactic in nature, like the fact that what comes after eat is usually a noun or an
+adjective, or that what comes after to is usually a verb. Others might be a fact about
+the personal assistant task, like the high probability of sentences beginning with
+the words I. And some might even be cultural rather than linguistic, like the higher
+probability that people are looking for Chinese versus English food.
+
+Some practical issues: Although for pedagogical purposes we have only described
+bigram models, in practice it’s more common to use trigram models, which con-trigram
+dition on the previous two words rather than the previous word, or 4-gram or even4-gram
+5-gram models, when there is sufficient training data. Note that for these larger N-5-gram
+grams, we’ll need to assume extra context for the contexts to the left and right of the
+
+
+
+4.2 • EVALUATING LANGUAGE MODELS 7
+
+sentence end. For example, to compute trigram probabilities at the very beginning of
+the sentence, we can use two pseudo-words for the first trigram (i.e., P(I|<s><s>).
+
+We always represent and compute language model probabilities in log format
+as log probabilities. Since probabilities are (by definition) less than or equal to 1,logprobabilities
+the more probabilities we multiply together, the smaller the product becomes. Mul-
+tiplying enough N-grams together would result in numerical underflow. By using
+log probabilities instead of raw probabilities, we get numbers that are not as small.
+Adding in log space is equivalent to multiplying in linear space, so we combine log
+probabilities by adding them. The result of doing all computation and storage in log
+space is that we only need to convert back into probabilities if we need to report
+them at the end; then we can just take the exp of the logprob:
+
+p1× p2× p3× p4 = exp(log p1 + log p2 + log p3 + log p4) (4.13)
+
+4.2 Evaluating Language Models
+
+The best way to evaluate the performance of a language model is to embed it in
+an application and measure how much the application improves. Such end-to-end
+evaluation is called extrinsic evaluation. Extrinsic evaluation is the only way toextrinsicevaluation
+know if a particular improvement in a component is really going to help the task
+at hand. Thus, for speech recognition, we can compare the performance of two
+language models by running the speech recognizer twice, once with each language
+model, and seeing which gives the more accurate transcription.
+
+Unfortunately, running big NLP systems end-to-end is often very expensive. In-
+stead, it would be nice to have a metric that can be used to quickly evaluate potential
+improvements in a language model. An intrinsic evaluation metric is one that mea-intrinsicevaluation
+sures the quality of a model independent of any application.
+
+For an intrinsic evaluation of a language model we need a test set. As with
+many of the statistical models in our field, the probabilities of an N-gram model
+come from the corpus it is trained on, the training set or training corpus. We cantraining set
+then measure the quality of an N-gram model by its performance on some unseen
+data called the test set or test corpus. We will also sometimes call test sets and othertest set
+datasets that are not in our training sets held out corpora because we hold them outheld out
+from the training data.
+
+So if we are given a corpus of text and want to compare two different N-gram
+models, we divide the data into training and test sets, train the parameters of both
+models on the training set, and then compare how well the two trained models fit the
+test set.
+
+But what does it mean to “fit the test set”? The answer is simple: whichever
+model assigns a higher probability to the test set—meaning it more accurately
+predicts the test set—is a better model. Given two probabilistic models, the better
+model is the one that has a tighter fit to the test data or that better predicts the details
+of the test data, and hence will assign a higher probability to the test data.
+
+Since our evaluation metric is based on test set probability, it’s important not to
+let the test sentences into the training set. Suppose we are trying to compute the
+probability of a particular “test” sentence. If our test sentence is part of the training
+corpus, we will mistakenly assign it an artificially high probability when it occurs
+in the test set. We call this situation training on the test set. Training on the test
+set introduces a bias that makes the probabilities all look too high, and causes huge
+
+
+
+8 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+inaccuracies in perplexity, the probability-based metric we introduce below.
+Sometimes we use a particular test set so often that we implicitly tune to its
+
+characteristics. We then need a fresh test set that is truly unseen. In such cases, we
+call the initial test set the development test set or, devset. How do we divide ourdevelopmenttest
+data into training, development, and test sets? We want our test set to be as large
+as possible, since a small test set may be accidentally unrepresentative, but we also
+want as much training data as possible. At the minimum, we would want to pick
+the smallest test set that gives us enough statistical power to measure a statistically
+significant difference between two potential models. In practice, we often just divide
+our data into 80% training, 10% development, and 10% test. Given a large corpus
+that we want to divide into training and test, test data can either be taken from some
+continuous sequence of text inside the corpus, or we can remove smaller “stripes”
+of text from randomly selected parts of our corpus and combine them into a test set.
+
+4.2.1 Perplexity
+In practice we don’t use raw probability as our metric for evaluating language mod-
+els, but a variant called perplexity. The perplexity (sometimes called PP for short)perplexity
+of a language model on a test set is the inverse probability of the test set, normalized
+by the number of words. For a test set W = w1w2 . . .wN ,:
+
+PP(W ) = P(w1w2 . . .wN)?
+1
+N (4.14)
+
+= N
+
+?
+1
+
+P(w1w2 . . .wN)
+
+We can use the chain rule to expand the probability of W :
+
+PP(W ) = N
+
+???? N?
+i=1
+
+1
+P(wi|w1 . . .wi?1)
+
+(4.15)
+
+Thus, if we are computing the perplexity of W with a bigram language model,
+we get:
+
+PP(W ) = N
+
+???? N?
+i=1
+
+1
+P(wi|wi?1)
+
+(4.16)
+
+Note that because of the inverse in Eq. 4.15, the higher the conditional probabil-
+ity of the word sequence, the lower the perplexity. Thus, minimizing perplexity is
+equivalent to maximizing the test set probability according to the language model.
+What we generally use for word sequence in Eq. 4.15 or Eq. 4.16 is the entire se-
+quence of words in some test set. Since this sequence will cross many sentence
+boundaries, we need to include the begin- and end-sentence markers <s> and </s>
+in the probability computation. We also need to include the end-of-sentence marker
+</s> (but not the beginning-of-sentence marker <s>) in the total count of word to-
+kens N.
+
+There is another way to think about perplexity: as the weighted average branch-
+ing factor of a language. The branching factor of a language is the number of possi-
+ble next words that can follow any word. Consider the task of recognizing the digits
+
+
+
+4.3 • GENERALIZATION AND ZEROS 9
+
+in English (zero, one, two,..., nine), given that each of the 10 digits occurs with equal
+probability P = 110 . The perplexity of this mini-language is in fact 10. To see that,
+imagine a string of digits of length N. By Eq. 4.15, the perplexity will be
+
+PP(W ) = P(w1w2 . . .wN)?
+1
+N
+
+= (
+1
+10
+
+N
+)?
+
+1
+N
+
+=
+1
+
+10
+
+?1
+
+= 10 (4.17)
+
+But suppose that the number zero is really frequent and occurs 10 times more
+often than other numbers. Now we should expect the perplexity to be lower since
+most of the time the next number will be zero. Thus, although the branching factor
+is still 10, the perplexity or weighted branching factor is smaller. We leave this
+calculation as an exercise to the reader.
+
+We see in Section 4.7 that perplexity is also closely related to the information-
+theoretic notion of entropy.
+
+Finally, let’s look at an example of how perplexity can be used to compare dif-
+ferent N-gram models. We trained unigram, bigram, and trigram grammars on 38
+million words (including start-of-sentence tokens) from the Wall Street Journal, us-
+ing a 19,979 word vocabulary. We then computed the perplexity of each of these
+models on a test set of 1.5 million words with Eq. 4.16. The table below shows the
+perplexity of a 1.5 million word WSJ test set according to each of these grammars.
+
+Unigram Bigram Trigram
+Perplexity 962 170 109
+
+As we see above, the more information the N-gram gives us about the word
+sequence, the lower the perplexity (since as Eq. 4.15 showed, perplexity is related
+inversely to the likelihood of the test sequence according to the model).
+
+Note that in computing perplexities, the N-gram model P must be constructed
+without any knowledge of the test set or any prior knowledge of the vocabulary of
+the test set. Any kind of knowledge of the test set can cause the perplexity to be
+artificially low. The perplexity of two language models is only comparable if they
+use identical vocabularies.
+
+An (intrinsic) improvement in perplexity does not guarantee an (extrinsic) im-
+provement in the performance of a language processing task like speech recognition
+or machine translation. Nonetheless, because perplexity often correlates with such
+improvements, it is commonly used as a quick check on an algorithm. But a model’s
+improvement in perplexity should always be confirmed by an end-to-end evaluation
+of a real task before concluding the evaluation of the model.
+
+4.3 Generalization and Zeros
+
+The N-gram model, like many statistical models, is dependent on the training corpus.
+One implication of this is that the probabilities often encode specific facts about a
+given training corpus. Another implication is that N-grams do a better and better job
+of modeling the training corpus as we increase the value of N.
+
+
+
+10 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+We can visualize both of these facts by borrowing the technique of Shannon
+(1951) and Miller and Selfridge (1950) of generating random sentences from dif-
+ferent N-gram models. It’s simplest to visualize how this works for the unigram
+case. Imagine all the words of the English language covering the probability space
+between 0 and 1, each word covering an interval proportional to its frequency. We
+choose a random value between 0 and 1 and print the word whose interval includes
+this chosen value. We continue choosing random numbers and generating words
+until we randomly generate the sentence-final token </s>. We can use the same
+technique to generate bigrams by first generating a random bigram that starts with
+<s> (according to its bigram probability). Let’s say the second word of that bigram
+is w. We next chose a random bigram starting with w (again, drawn according to its
+bigram probability), and so on.
+
+To give an intuition for the increasing power of higher-order N-grams, Fig. 4.3
+shows random sentences generated from unigram, bigram, trigram, and 4-gram
+models trained on Shakespeare’s works.
+
+1
+–To him swallowed confess hear both. Which. Of save on trail for are ay device and
+rote life have
+
+gram –Hill he late speaks; or! a more to leg less first you enter
+
+2
+–Why dost stand forth thy canopy, forsooth; he is this palpable hit the King Henry. Live
+king. Follow.
+
+gram –What means, sir. I confess she? then all sorts, he is trim, captain.
+
+3
+–Fly, and will rid me these news of price. Therefore the sadness of parting, as they say,
+’tis done.
+
+gram –This shall forbid it should be branded, if renown made it empty.
+
+4
+–King Henry. What! I will go seek the traitor Gloucester. Exeunt some of the watch. A
+great banquet serv’d in;
+
+gram –It cannot be but so.
+Figure 4.3 Eight sentences randomly generated from four N-grams computed from Shakespeare’s works. All
+characters were mapped to lower-case and punctuation marks were treated as words. Output is hand-corrected
+for capitalization to improve readability.
+
+The longer the context on which we train the model, the more coherent the sen-
+tences. In the unigram sentences, there is no coherent relation between words or any
+sentence-final punctuation. The bigram sentences have some local word-to-word
+coherence (especially if we consider that punctuation counts as a word). The tri-
+gram and 4-gram sentences are beginning to look a lot like Shakespeare. Indeed, a
+careful investigation of the 4-gram sentences shows that they look a little too much
+like Shakespeare. The words It cannot be but so are directly from King John. This
+is because, not to put the knock on Shakespeare, his oeuvre is not very large as
+corpora go (N = 884,647,V = 29,066), and our N-gram probability matrices are
+ridiculously sparse. There are V 2 = 844,000,000 possible bigrams alone, and the
+number of possible 4-grams is V 4 = 7×1017. Thus, once the generator has chosen
+the first 4-gram (It cannot be but), there are only five possible continuations (that, I,
+he, thou, and so); indeed, for many 4-grams, there is only one continuation.
+
+To get an idea of the dependence of a grammar on its training set, let’s look at an
+N-gram grammar trained on a completely different corpus: the Wall Street Journal
+(WSJ) newspaper. Shakespeare and the Wall Street Journal are both English, so
+we might expect some overlap between our N-grams for the two genres. Fig. 4.4
+
+
+
+4.3 • GENERALIZATION AND ZEROS 11
+
+shows sentences generated by unigram, bigram, and trigram grammars trained on
+40 million words from WSJ.
+
+1 Months the my and issue of year foreign new exchange’s septemberwere recession exchange new endorsed a acquire to six executives
+gram
+
+2
+Last December through the way to preserve the Hudson corporation N.
+B. E. C. Taylor would seem to complete the major central planners one
+
+gram point five percent of U. S. E. has already old M. X. corporation of living
+on information such as more frequently fishing to keep her
+
+3
+They also point to ninety nine point six billion dollars from two hundred
+four oh six three percent of the rates of interest stores as Mexico and
+
+gram Brazil on market conditions
+Figure 4.4 Three sentences randomly generated from three N-gram models computed from
+40 million words of the Wall Street Journal, lower-casing all characters and treating punctua-
+tion as words. Output was then hand-corrected for capitalization to improve readability.
+
+Compare these examples to the pseudo-Shakespeare in Fig. 4.3. While superfi-
+cially they both seem to model “English-like sentences”, there is obviously no over-
+lap whatsoever in possible sentences, and little if any overlap even in small phrases.
+This stark difference tells us that statistical models are likely to be pretty useless as
+predictors if the training sets and the test sets are as different as Shakespeare and
+WSJ.
+
+How should we deal with this problem when we build N-gram models? One way
+is to be sure to use a training corpus that has a similar genre to whatever task we are
+trying to accomplish. To build a language model for translating legal documents,
+we need a training corpus of legal documents. To build a language model for a
+question-answering system, we need a training corpus of questions.
+
+Matching genres is still not sufficient. Our models may still be subject to the
+problem of sparsity. For any N-gram that occurred a sufficient number of times,
+we might have a good estimate of its probability. But because any corpus is limited,
+some perfectly acceptable English word sequences are bound to be missing from it.
+That is, we’ll have many cases of putative “zero probability N-grams” that should
+really have some non-zero probability. Consider the words that follow the bigram
+denied the in the WSJ Treebank3 corpus, together with their counts:
+
+denied the allegations: 5
+denied the speculation: 2
+denied the rumors: 1
+denied the report: 1
+
+But suppose our test set has phrases like:
+
+denied the offer
+denied the loan
+
+Our model will incorrectly estimate that the P(offer|denied the) is 0!
+These zeros— things that don’t ever occur in the training set but do occur inzeros
+
+the test set—are a problem for two reasons. First, their presence means we are
+underestimating the probability of all sorts of words that might occur, which will
+hurt the performance of any application we want to run on this data.
+
+Second, if the probability of any word in the test set is 0, the entire probability
+of the test set is 0. By definition, perplexity is based on the inverse probability of the
+
+
+
+12 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+test set. Thus if some words have zero probability, we can’t compute perplexity at
+all, since we can’t divide by 0!
+
+4.3.1 Unknown Words
+The previous section discussed the problem of words whose bigram probability is
+zero. But what about words we simply have never seen before?
+
+Sometimes we have a language task in which this can’t happen because we know
+all the words that can occur. In such a closed vocabulary system the test set canclosedvocabulary
+only contain words from this lexicon, and there will be no unknown words. This is
+a reasonable assumption in some domains, such as speech recognition or machine
+translation, where we have a pronunciation dictionary or a phrase table that are fixed
+in advance, and so the language model can only use the words in that dictionary or
+phrase table.
+
+In other cases we have to deal with words we haven’t seen before, which we’ll
+call unknown words, or out of vocabulary (OOV) words. The percentage of OOVOOV
+words that appear in the test set is called the OOV rate. An open vocabulary systemopenvocabulary
+is one in which we model these potential unknown words in the test set by adding a
+pseudo-word called <UNK>.
+
+There are two common ways to train the probabilities of the unknown word
+model <UNK>. The first one is to turn the problem back into a closed vocabulary one
+by choosing a fixed vocabulary in advance:
+
+1. Choose a vocabulary (word list) that is fixed in advance.
+2. Convert in the training set any word that is not in this set (any OOV word) to
+
+the unknown word token <UNK> in a text normalization step.
+3. Estimate the probabilities for <UNK> from its counts just like any other regular
+
+word in the training set.
+
+The second alternative, in situations where we don’t have a prior vocabulary in ad-
+vance, is to create such a vocabulary implicitly, replacing words in the training data
+by <UNK> based on their frequency. For example we can replace by <UNK> all words
+that occur fewer than n times in the training set, where n is some small number, or
+equivalently select a vocabulary size V in advance (say 50,000) and choose the top
+V words by frequency and replace the rest by UNK. In either case we then proceed
+to train the language model as before, treating <UNK> like a regular word.
+
+The exact choice of <UNK> model does have an effect on metrics like perplexity.
+A language model can achieve low perplexity by choosing a small vocabulary and
+assigning the unknown word a high probability. For this reason, perplexities should
+only be compared across language models with the same vocabularies (Buck et al.,
+2014).
+
+4.4 Smoothing
+
+What do we do with words that are in our vocabulary (they are not unknown words)
+but appear in a test set in an unseen context (for example they appear after a word
+they never appeared after in training)? To keep a language model from assigning
+zero probability to these unseen events, we’ll have to shave off a bit of probability
+mass from some more frequent events and give it to the events we’ve never seen.
+This modification is called smoothing or discounting. In this section and the fol-smoothing
+
+discounting
+
+
+
+4.4 • SMOOTHING 13
+
+lowing ones we’ll introduce a variety of ways to do smoothing: add-1 smoothing,
+add-k smoothing, Stupid backoff, and Kneser-Ney smoothing.
+
+4.4.1 Laplace Smoothing
+The simplest way to do smoothing is to add one to all the bigram counts, before
+we normalize them into probabilities. All the counts that used to be zero will now
+have a count of 1, the counts of 1 will be 2, and so on. This algorithm is called
+Laplace smoothing. Laplace smoothing does not perform well enough to be usedLaplacesmoothing
+in modern N-gram models, but it usefully introduces many of the concepts that we
+see in other smoothing algorithms, gives a useful baseline, and is also a practical
+smoothing algorithm for other tasks like text classification (Chapter 7).
+
+Let’s start with the application of Laplace smoothing to unigram probabilities.
+Recall that the unsmoothed maximum likelihood estimate of the unigram probability
+of the word wi is its count ci normalized by the total number of word tokens N:
+
+P(wi) =
+ci
+N
+
+Laplace smoothing merely adds one to each count (hence its alternate name add-
+one smoothing). Since there are V words in the vocabulary and each one was incre-add-one
+mented, we also need to adjust the denominator to take into account the extra V
+observations. (What happens to our P values if we don’t increase the denominator?)
+
+PLaplace(wi) =
+ci +1
+N +V
+
+(4.18)
+
+Instead of changing both the numerator and denominator, it is convenient to
+describe how a smoothing algorithm affects the numerator, by defining an adjusted
+count c?. This adjusted count is easier to compare directly with the MLE counts and
+can be turned into a probability like an MLE count by normalizing by N. To define
+this count, since we are only changing the numerator in addition to adding 1 we’ll
+also need to multiply by a normalization factor NN+V :
+
+c?i = (ci +1)
+N
+
+N +V
+(4.19)
+
+We can now turn c?i into a probability P
+?
+i by normalizing by N.
+
+A related way to view smoothing is as discounting (lowering) some non-zerodiscounting
+counts in order to get the probability mass that will be assigned to the zero counts.
+Thus, instead of referring to the discounted counts c?, we might describe a smooth-
+ing algorithm in terms of a relative discount dc, the ratio of the discounted countsdiscount
+to the original counts:
+
+dc =
+c?
+
+c
+
+Now that we have the intuition for the unigram case, let’s smooth our Berkeley
+Restaurant Project bigrams. Figure 4.5 shows the add-one smoothed counts for the
+bigrams in Fig. 4.1.
+
+Figure 4.6 shows the add-one smoothed probabilities for the bigrams in Fig. 4.2.
+Recall that normal bigram probabilities are computed by normalizing each row of
+counts by the unigram count:
+
+
+
+14 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+i want to eat chinese food lunch spend
+i 6 828 1 10 1 1 1 3
+want 3 1 609 2 7 7 6 2
+to 3 1 5 687 3 1 7 212
+eat 1 1 3 1 17 3 43 1
+chinese 2 1 1 1 1 83 2 1
+food 16 1 16 1 2 5 1 1
+lunch 3 1 1 1 1 2 1 1
+spend 2 1 2 1 1 1 1 1
+
+Figure 4.5 Add-one smoothed bigram counts for eight of the words (out of V = 1446) in
+the Berkeley Restaurant Project corpus of 9332 sentences. Previously-zero counts are in gray.
+
+P(wn|wn?1) =
+C(wn?1wn)
+
+C(wn?1)
+(4.20)
+
+For add-one smoothed bigram counts, we need to augment the unigram count by
+the number of total word types in the vocabulary V :
+
+P?Laplace(wn|wn?1) =
+C(wn?1wn)+1
+C(wn?1)+V
+
+(4.21)
+
+Thus, each of the unigram counts given in the previous section will need to be
+augmented by V = 1446. The result is the smoothed bigram probabilities in Fig. 4.6.
+
+i want to eat chinese food lunch spend
+i 0.0015 0.21 0.00025 0.0025 0.00025 0.00025 0.00025 0.00075
+want 0.0013 0.00042 0.26 0.00084 0.0029 0.0029 0.0025 0.00084
+to 0.00078 0.00026 0.0013 0.18 0.00078 0.00026 0.0018 0.055
+eat 0.00046 0.00046 0.0014 0.00046 0.0078 0.0014 0.02 0.00046
+chinese 0.0012 0.00062 0.00062 0.00062 0.00062 0.052 0.0012 0.00062
+food 0.0063 0.00039 0.0063 0.00039 0.00079 0.002 0.00039 0.00039
+lunch 0.0017 0.00056 0.00056 0.00056 0.00056 0.0011 0.00056 0.00056
+spend 0.0012 0.00058 0.0012 0.00058 0.00058 0.00058 0.00058 0.00058
+
+Figure 4.6 Add-one smoothed bigram probabilities for eight of the words (out of V = 1446) in the BeRP
+corpus of 9332 sentences. Previously-zero probabilities are in gray.
+
+It is often convenient to reconstruct the count matrix so we can see how much a
+smoothing algorithm has changed the original counts. These adjusted counts can be
+computed by Eq. 4.22. Figure 4.7 shows the reconstructed counts.
+
+c?(wn?1wn) =
+[C(wn?1wn)+1]×C(wn?1)
+
+C(wn?1)+V
+(4.22)
+
+Note that add-one smoothing has made a very big change to the counts. C(want to)
+changed from 608 to 238! We can see this in probability space as well: P(to|want)
+decreases from .66 in the unsmoothed case to .26 in the smoothed case. Looking at
+the discount d (the ratio between new and old counts) shows us how strikingly the
+counts for each prefix word have been reduced; the discount for the bigram want to
+is .39, while the discount for Chinese food is .10, a factor of 10!
+
+The sharp change in counts and probabilities occurs because too much probabil-
+ity mass is moved to all the zeros.
+
+
+
+4.4 • SMOOTHING 15
+
+i want to eat chinese food lunch spend
+i 3.8 527 0.64 6.4 0.64 0.64 0.64 1.9
+want 1.2 0.39 238 0.78 2.7 2.7 2.3 0.78
+to 1.9 0.63 3.1 430 1.9 0.63 4.4 133
+eat 0.34 0.34 1 0.34 5.8 1 15 0.34
+chinese 0.2 0.098 0.098 0.098 0.098 8.2 0.2 0.098
+food 6.9 0.43 6.9 0.43 0.86 2.2 0.43 0.43
+lunch 0.57 0.19 0.19 0.19 0.19 0.38 0.19 0.19
+spend 0.32 0.16 0.32 0.16 0.16 0.16 0.16 0.16
+
+Figure 4.7 Add-one reconstituted counts for eight words (of V = 1446) in the BeRP corpus
+of 9332 sentences. Previously-zero counts are in gray.
+
+4.4.2 Add-k smoothing
+One alternative to add-one smoothing is to move a bit less of the probability mass
+from the seen to the unseen events. Instead of adding 1 to each count, we add a frac-
+tional count k (.5? .05? .01?). This algorithm is therefore called add-k smoothing.add-k
+
+P?Add-k(wn|wn?1) =
+C(wn?1wn)+ k
+C(wn?1)+ kV
+
+(4.23)
+
+Add-k smoothing requires that we have a method for choosing k; this can be
+done, for example, by optimizing on a devset. Although add-k is useful for some
+tasks (including text classification), it turns out that it still doesn’t work well for
+language modeling, generating counts with poor variances and often inappropriate
+discounts (Gale and Church, 1994).
+
+4.4.3 Backoff and Interpolation
+The discounting we have been discussing so far can help solve the problem of zero
+frequency N-grams. But there is an additional source of knowledge we can draw
+on. If we are trying to compute P(wn|wn?2wn?1) but we have no examples of a
+particular trigram wn?2wn?1wn, we can instead estimate its probability by using
+the bigram probability P(wn|wn?1). Similarly, if we don’t have counts to compute
+P(wn|wn?1), we can look to the unigram P(wn).
+
+In other words, sometimes using less context is a good thing, helping to general-
+ize more for contexts that the model hasn’t learned much about. There are two ways
+to use this N-gram “hierarchy”. In backoff, we use the trigram if the evidence isbackoff
+sufficient, otherwise we use the bigram, otherwise the unigram. In other words, we
+only “back off” to a lower-order N-gram if we have zero evidence for a higher-order
+N-gram. By contrast, in interpolation, we always mix the probability estimatesinterpolation
+from all the N-gram estimators, weighing and combining the trigram, bigram, and
+unigram counts.
+
+In simple linear interpolation, we combine different order N-grams by linearly
+interpolating all the models. Thus, we estimate the trigram probability P(wn|wn?2wn?1)
+by mixing together the unigram, bigram, and trigram probabilities, each weighted
+by a ? :
+
+P?(wn|wn?2wn?1) = ?1P(wn|wn?2wn?1)
++?2P(wn|wn?1)
++?3P(wn) (4.24)
+
+
+
+16 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+such that the ? s sum to 1: ?
+i
+
+?i = 1 (4.25)
+
+In a slightly more sophisticated version of linear interpolation, each ? weight is
+computed by conditioning on the context. This way, if we have particularly accurate
+counts for a particular bigram, we assume that the counts of the trigrams based on
+this bigram will be more trustworthy, so we can make the ? s for those trigrams
+higher and thus give that trigram more weight in the interpolation. Equation 4.26
+shows the equation for interpolation with context-conditioned weights:
+
+P?(wn|wn?2wn?1) = ?1(wn?1n?2)P(wn|wn?2wn?1)
++?2(wn?1n?2)P(wn|wn?1)
++?3(wn?1n?2)P(wn) (4.26)
+
+How are these ? values set? Both the simple interpolation and conditional inter-
+polation ? s are learned from a held-out corpus. A held-out corpus is an additionalheld-out
+training corpus that we use to set hyperparameters like these ? values, by choosing
+the ? values that maximize the likelihood of the held-out corpus. That is, we fix
+the N-gram probabilities and then search for the ? values that—when plugged into
+Eq. 4.24—give us the highest probability of the held-out set. There are various ways
+to find this optimal set of ? s. One way is to use the EM algorithm defined in Chap-
+ter 9, which is an iterative learning algorithm that converges on locally optimal ? s
+(Jelinek and Mercer, 1980).
+
+In a backoff N-gram model, if the N-gram we need has zero counts, we approx-
+imate it by backing off to the (N-1)-gram. We continue backing off until we reach a
+history that has some counts.
+
+In order for a backoff model to give a correct probability distribution, we have
+to discount the higher-order N-grams to save some probability mass for the lowerdiscount
+order N-grams. Just as with add-one smoothing, if the higher-order N-grams aren’t
+discounted and we just used the undiscounted MLE probability, then as soon as
+we replaced an N-gram which has zero probability with a lower-order N-gram, we
+would be adding probability mass, and the total probability assigned to all possible
+strings by the language model would be greater than 1! In addition to this explicit
+discount factor, we’ll need a function ? to distribute this probability mass to the
+lower order N-grams.
+
+This kind of backoff with discounting is also called Katz backoff. In Katz back-Katz backoff
+off we rely on a discounted probability P? if we’ve seen this N-gram before (i.e., if
+we have non-zero counts). Otherwise, we recursively back off to the Katz probabil-
+ity for the shorter-history (N-1)-gram. The probability for a backoff N-gram PBO is
+thus computed as follows:
+
+PBO(wn|w
+n?1
+n?N+1) =
+
+??? P
+?(wn|wn?1n?N+1), if C(wnn?N+1)> 0
+
+?(wn?1n?N+1)PBO(wn|w
+n?1
+n?N+2), otherwise.
+
+(4.27)
+Katz backoff is often combined with a smoothing method called Good-Turing.Good-Turing
+
+The combined Good-Turing backoff algorithm involves quite detailed computation
+for estimating the Good-Turing smoothing and the P? and ? values.
+
+
+
+4.5 • KNESER-NEY SMOOTHING 17
+
+4.5 Kneser-Ney Smoothing
+
+One of the most commonly used and best performing N-gram smoothing methods
+is the interpolated Kneser-Ney algorithm (Kneser and Ney 1995, Chen and Good-Kneser-Ney
+man 1998).
+
+Kneser-Ney has its roots in a method called absolute discounting. Recall that
+discounting of the counts for frequent N-grams is necessary to save some probabil-
+ity mass for the smoothing algorithm to distribute to the unseen N-grams.
+
+To see this, we can use a clever idea from Church and Gale (1991). Consider
+an N-gram that has count 4. We need to discount this count by some amount. But
+how much should we discount it? Church and Gale’s clever idea was to look at a
+held-out corpus and just see what the count is for all those bigrams that had count
+4 in the training set. They computed a bigram grammar from 22 million words of
+AP newswire and then checked the counts of each of these bigrams in another 22
+million words. On average, a bigram that occurred 4 times in the first 22 million
+words occurred 3.23 times in the next 22 million words. The following table from
+Church and Gale (1991) shows these counts for bigrams with c from 0 to 9:
+
+Bigram count in Bigram count in
+training set heldout set
+
+0 0.0000270
+1 0.448
+2 1.25
+3 2.24
+4 3.23
+5 4.21
+6 5.23
+7 6.21
+8 7.21
+9 8.26
+
+Figure 4.8 For all bigrams in 22 million words of AP newswire of count 0, 1, 2,...,9, the
+counts of these bigrams in a held-out corpus also of 22 million words.
+
+The astute reader may have noticed that except for the held-out counts for 0
+and 1, all the other bigram counts in the held-out set could be estimated pretty well
+by just subtracting 0.75 from the count in the training set! Absolute discountingAbsolutediscounting
+formalizes this intuition by subtracting a fixed (absolute) discount d from each count.
+The intuition is that since we have good estimates already for the very high counts, a
+small discount d won’t affect them much. It will mainly modify the smaller counts,
+for which we don’t necessarily trust the estimate anyway, and Fig. 4.8 suggests that
+in practice this discount is actually a good one for bigrams with counts 2 through 9.
+The equation for interpolated absolute discounting applied to bigrams:
+
+PAbsoluteDiscounting(wi|wi?1) =
+C(wi?1wi)?d?
+
+v C(wi?1v)
++? (wi?1)P(wi) (4.28)
+
+The first term is the discounted bigram, and the second term the unigram with an
+interpolation weight ? . We could just set all the d values to .75, or we could keep a
+separate discount value of 0.5 for the bigrams with counts of 1.
+
+Kneser-Ney discounting (Kneser and Ney, 1995) augments absolute discount-
+ing with a more sophisticated way to handle the lower-order unigram distribution.
+
+
+
+18 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+Consider the job of predicting the next word in this sentence, assuming we are inter-
+polating a bigram and a unigram model.
+
+I can’t see without my reading .
+
+The word glasses seems much more likely to follow here than, say, the word
+Kong, so we’d like our unigram model to prefer glasses. But in fact it’s Kong that is
+more common, since Hong Kong is a very frequent word. A standard unigram model
+will assign Kong a higher probability than glasses. We would like to capture the
+intuition that although Kong is frequent, it is mainly only frequent in the phrase Hong
+Kong, that is, after the word Hong. The word glasses has a much wider distribution.
+
+In other words, instead of P(w), which answers the question “How likely is
+w?”, we’d like to create a unigram model that we might call PCONTINUATION, which
+answers the question “How likely is w to appear as a novel continuation?”. How can
+we estimate this probability of seeing the word w as a novel continuation, in a new
+unseen context? The Kneser-Ney intuition is to base our estimate of PCONTINUATION
+on the number of different contexts word w has appeared in, that is, the number of
+bigram types it completes. Every bigram type was a novel continuation the first time
+it was seen. We hypothesize that words that have appeared in more contexts in the
+past are more likely to appear in some new context as well. The number of times a
+word w appears as a novel continuation can be expressed as:
+
+PCONTINUATION(w) ? |{v : C(vw)> 0}| (4.29)
+
+To turn this count into a probability, we normalize by the total number of word
+bigram types. In summary:
+
+PCONTINUATION(w) =
+|{v : C(vw)> 0}|
+
+|{(u?,w?) : C(u?w?)> 0}|
+(4.30)
+
+An alternative metaphor for an equivalent formulation is to use the number of
+word types seen to precede w (Eq. 4.29 repeated):
+
+PCONTINUATION(w) ? |{v : C(vw)> 0}| (4.31)
+
+normalized by the number of words preceding all words, as follows:
+
+PCONTINUATION(w) =
+|{v : C(vw)> 0}|?
+w? |{v : C(vw?)> 0}|
+
+(4.32)
+
+A frequent word (Kong) occurring in only one context (Hong) will have a low
+continuation probability.
+
+The final equation for Interpolated Kneser-Ney smoothing for bigrams is then:InterpolatedKneser-Ney
+
+PKN(wi|wi?1) =
+max(C(wi?1wi)?d,0)
+
+C(wi?1)
++? (wi?1)PCONTINUATION(wi) (4.33)
+
+The ? is a normalizing constant that is used to distribute the probability mass
+we’ve discounted.:
+
+? (wi?1) =
+d?
+
+v C(wi?1v)
+|{w : C(wi?1w)> 0}| (4.34)
+
+The first term d?
+v C(wi?1v)
+
+is the normalized discount. The second term |{w : C(wi?1w)> 0}|
+is the number of word types that can follow wi?1 or, equivalently, the number of
+
+
+
+4.6 • THE WEB AND STUPID BACKOFF 19
+
+word types that we discounted; in other words, the number of times we applied the
+normalized discount.
+
+The general recursive formulation is as follows:
+
+PKN(wi|wi?1i?n+1) =
+max(cKN(w ii?n+1)?d,0)?
+
+v cKN(w
+i?1
+i?n+1v)
+
++? (wi?1i?n+1)PKN(wi|w
+i?1
+i?n+2) (4.35)
+
+where the definition of the count cKN depends on whether we are counting the
+highest-order N-gram being interpolated (for example trigram if we are interpolat-
+ing trigram, bigram, and unigram) or one of the lower-order N-grams (bigram or
+unigram if we are interpolating trigram, bigram, and unigram):
+
+cKN(·) =
+{
+
+count(·) for the highest order
+continuationcount(·) for lower orders (4.36)
+
+The continuation count is the number of unique single word contexts for ·.
+At the termination of the recursion, unigrams are interpolated with the uniform
+
+distribution, where the parameter ? is the empty string:
+
+PKN(w) =
+max(cKN(w)?d,0)?
+
+w? cKN(w?)
++? (?)
+
+1
+V
+
+(4.37)
+
+If we want to include an unknown word <UNK>, it’s just included as a regular vo-
+cabulary entry with count zero, and hence its probability will be a lambda-weighted
+uniform distribution ? (?)V .
+
+The best-performing version of Kneser-Ney smoothing is called modified Kneser-
+Ney smoothing, and is due to Chen and Goodman (1998). Rather than use a singlemodifiedKneser-Ney
+fixed discount d, modified Kneser-Ney uses three different discounts d1, d2, and
+d3+ for N-grams with counts of 1, 2 and three or more, respectively. See Chen and
+Goodman (1998, p. 19) or Heafield et al. (2013) for the details.
+
+4.6 The Web and Stupid Backoff
+
+By using text from the web, it is possible to build extremely large language mod-
+els. In 2006 Google released a very large set of N-gram counts, including N-grams
+(1-grams through 5-grams) from all the five-word sequences that appear at least
+40 times from 1,024,908,267,229 words of running text on the web; this includes
+1,176,470,663 five-word sequences using over 13 million unique words types (Franz
+and Brants, 2006). Some examples:
+
+4-gram Count
+serve as the incoming 92
+serve as the incubator 99
+serve as the independent 794
+serve as the index 223
+serve as the indication 72
+serve as the indicator 120
+serve as the indicators 45
+serve as the indispensable 111
+serve as the indispensible 40
+serve as the individual 234
+
+
+
+20 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+Efficiency considerations are important when building language models that use
+such large sets of N-grams. Rather than store each word as a string, it is generally
+represented in memory as a 64-bit hash number, with the words themselves stored
+on disk. Probabilities are generally quantized using only 4-8 bits (instead of 8-byte
+floats), and N-grams are stored in reverse tries.
+
+N-grams can also be shrunk by pruning, for example only storing N-grams with
+counts greater than some threshold (such as the count threshold of 40 used for the
+Google N-gram release) or using entropy to prune less-important N-grams (Stolcke,
+1998). Another option is to build approximate language models using techniques
+like Bloom filters (Talbot and Osborne 2007, Church et al. 2007). Finally, effi-Bloom filters
+cient language model toolkits like KenLM (Heafield 2011, Heafield et al. 2013) use
+sorted arrays, efficiently combine probabilities and backoffs in a single value, and
+use merge sorts to efficiently build the probability tables in a minimal number of
+passes through a large corpus.
+
+Although with these toolkits it is possible to build web-scale language models
+using full Kneser-Ney smoothing, Brants et al. (2007) show that with very large lan-
+guage models a much simpler algorithm may be sufficient. The algorithm is called
+stupid backoff. Stupid backoff gives up the idea of trying to make the languagestupid backoff
+model a true probability distribution. There is no discounting of the higher-order
+probabilities. If a higher-order N-gram has a zero count, we simply backoff to a
+lower order N-gram, weighed by a fixed (context-independent) weight. This algo-
+rithm does not produce a probability distribution, so we’ll follow Brants et al. (2007)
+in referring to it as S:
+
+S(wi|wi?1i?k+1) =
+
+???
+count(wii?k+1)
+count(wi?1i?k+1)
+
+if count(wii?k+1)> 0
+
+?S(wi|wi?1i?k+2) otherwise
+(4.38)
+
+The backoff terminates in the unigram, which has probability S(w)= count(w)N . Brants
+et al. (2007) find that a value of 0.4 worked well for ? .
+
+4.7 Advanced: Perplexity’s Relation to Entropy
+
+We introduced perplexity in Section 4.2.1 as a way to evaluate N-gram models on
+a test set. A better N-gram model is one that assigns a higher probability to the
+test data, and perplexity is a normalized version of the probability of the test set.
+The perplexity measure actually arises from the information-theoretic concept of
+cross-entropy, which explains otherwise mysterious properties of perplexity (why
+the inverse probability, for example?) and its relationship to entropy. Entropy is aEntropy
+measure of information. Given a random variable X ranging over whatever we are
+predicting (words, letters, parts of speech, the set of which we’ll call ?) and with a
+particular probability function, call it p(x), the entropy of the random variable X is:
+
+H(X) =?
+?
+x??
+
+p(x) log2 p(x) (4.39)
+
+The log can, in principle, be computed in any base. If we use log base 2, the
+resulting value of entropy will be measured in bits.
+
+One intuitive way to think about entropy is as a lower bound on the number of
+bits it would take to encode a certain decision or piece of information in the optimal
+
+
+
+4.7 • ADVANCED: PERPLEXITY’S RELATION TO ENTROPY 21
+
+coding scheme.
+Consider an example from the standard information theory textbook Cover and
+
+Thomas (1991). Imagine that we want to place a bet on a horse race but it is too
+far to go all the way to Yonkers Racetrack, so we’d like to send a short message to
+the bookie to tell him which of the eight horses to bet on. One way to encode this
+message is just to use the binary representation of the horse’s number as the code;
+thus, horse 1 would be 001, horse 2 010, horse 3 011, and so on, with horse 8 coded
+as 000. If we spend the whole day betting and each horse is coded with 3 bits, on
+average we would be sending 3 bits per race.
+
+Can we do better? Suppose that the spread is the actual distribution of the bets
+placed and that we represent it as the prior probability of each horse as follows:
+
+Horse 1 12 Horse 5
+1
+64
+
+Horse 2 14 Horse 6
+1
+64
+
+Horse 3 18 Horse 7
+1
+64
+
+Horse 4 116 Horse 8
+1
+64
+
+The entropy of the random variable X that ranges over horses gives us a lower
+bound on the number of bits and is
+
+H(X) = ?
+i=8?
+i=1
+
+p(i) log p(i)
+
+= ? 12 log
+1
+2?
+
+1
+4 log
+
+1
+4?
+
+1
+8 log
+
+1
+8?
+
+1
+16 log
+
+1
+16?4(
+
+1
+64 log
+
+1
+64 )
+
+= 2 bits (4.40)
+
+A code that averages 2 bits per race can be built with short encodings for more
+probable horses, and longer encodings for less probable horses. For example, we
+could encode the most likely horse with the code 0, and the remaining horses as 10,
+then 110, 1110, 111100, 111101, 111110, and 111111.
+
+What if the horses are equally likely? We saw above that if we used an equal-
+length binary code for the horse numbers, each horse took 3 bits to code, so the
+average was 3. Is the entropy the same? In this case each horse would have a
+probability of 18 . The entropy of the choice of horses is then
+
+H(X) =?
+i=8?
+i=1
+
+1
+8
+
+log
+1
+8
+=? log 1
+
+8
+= 3 bits (4.41)
+
+Until now we have been computing the entropy of a single variable. But most of
+what we will use entropy for involves sequences. For a grammar, for example, we
+will be computing the entropy of some sequence of words W = {w0,w1,w2, . . . ,wn}.
+One way to do this is to have a variable that ranges over sequences of words. For
+example we can compute the entropy of a random variable that ranges over all finite
+sequences of words of length n in some language L as follows:
+
+H(w1,w2, . . . ,wn) =?
+?
+
+W n1 ?L
+p(W n1 ) log p(W
+
+n
+1 ) (4.42)
+
+We could define the entropy rate (we could also think of this as the per-wordentropy rate
+
+
+
+22 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+entropy) as the entropy of this sequence divided by the number of words:
+
+1
+n
+
+H(W n1 ) =?
+1
+n
+
+?
+W n1 ?L
+
+p(W n1 ) log p(W
+n
+1 ) (4.43)
+
+But to measure the true entropy of a language, we need to consider sequences of
+infinite length. If we think of a language as a stochastic process L that produces a
+sequence of words, and allow W to represent the sequence of words w1, . . . ,wn, then
+L’s entropy rate H(L) is defined as
+
+H(L) = ? lim
+n??
+
+1
+n
+
+H(w1,w2, . . . ,wn)
+
+= ? lim
+n??
+
+1
+n
+
+?
+W?L
+
+p(w1, . . . ,wn) log p(w1, . . . ,wn) (4.44)
+
+The Shannon-McMillan-Breiman theorem (Algoet and Cover 1988, Cover and
+Thomas 1991) states that if the language is regular in certain ways (to be exact, if it
+is both stationary and ergodic),
+
+H(L) = lim
+n??
+?1
+
+n
+log p(w1w2 . . .wn) (4.45)
+
+That is, we can take a single sequence that is long enough instead of summing
+over all possible sequences. The intuition of the Shannon-McMillan-Breiman the-
+orem is that a long-enough sequence of words will contain in it many other shorter
+sequences and that each of these shorter sequences will reoccur in the longer se-
+quence according to their probabilities.
+
+A stochastic process is said to be stationary if the probabilities it assigns to aStationary
+sequence are invariant with respect to shifts in the time index. In other words, the
+probability distribution for words at time t is the same as the probability distribution
+at time t + 1. Markov models, and hence N-grams, are stationary. For example, in
+a bigram, Pi is dependent only on Pi?1. So if we shift our time index by x, Pi+x is
+still dependent on Pi+x?1. But natural language is not stationary, since as we show
+in Chapter 11, the probability of upcoming words can be dependent on events that
+were arbitrarily distant and time dependent. Thus, our statistical models only give
+an approximation to the correct distributions and entropies of natural language.
+
+To summarize, by making some incorrect but convenient simplifying assump-
+tions, we can compute the entropy of some stochastic process by taking a very long
+sample of the output and computing its average log probability.
+
+Now we are ready to introduce cross-entropy. The cross-entropy is useful whencross-entropy
+we don’t know the actual probability distribution p that generated some data. It
+allows us to use some m, which is a model of p (i.e., an approximation to p). The
+cross-entropy of m on p is defined by
+
+H(p,m) = lim
+n??
+?1
+
+n
+
+?
+W?L
+
+p(w1, . . . ,wn) logm(w1, . . . ,wn) (4.46)
+
+That is, we draw sequences according to the probability distribution p, but sum
+the log of their probabilities according to m.
+
+Again, following the Shannon-McMillan-Breiman theorem, for a stationary er-
+godic process:
+
+
+
+4.8 • SUMMARY 23
+
+H(p,m) = lim
+n??
+?1
+
+n
+logm(w1w2 . . .wn) (4.47)
+
+This means that, as for entropy, we can estimate the cross-entropy of a model
+m on some distribution p by taking a single sequence that is long enough instead of
+summing over all possible sequences.
+
+What makes the cross-entropy useful is that the cross-entropy H(p,m) is an up-
+per bound on the entropy H(p). For any model m:
+
+H(p)? H(p,m) (4.48)
+
+This means that we can use some simplified model m to help estimate the true en-
+tropy of a sequence of symbols drawn according to probability p. The more accurate
+m is, the closer the cross-entropy H(p,m) will be to the true entropy H(p). Thus,
+the difference between H(p,m) and H(p) is a measure of how accurate a model is.
+Between two models m1 and m2, the more accurate model will be the one with the
+lower cross-entropy. (The cross-entropy can never be lower than the true entropy, so
+a model cannot err by underestimating the true entropy.)
+
+We are finally ready to see the relation between perplexity and cross-entropy as
+we saw it in Eq. 4.47. Cross-entropy is defined in the limit, as the length of the
+observed word sequence goes to infinity. We will need an approximation to cross-
+entropy, relying on a (sufficiently long) sequence of fixed length. This approxima-
+tion to the cross-entropy of a model M = P(wi|wi?N+1...wi?1) on a sequence of
+words W is
+
+H(W ) =? 1
+N
+
+logP(w1w2 . . .wN) (4.49)
+
+The perplexity of a model P on a sequence of words W is now formally defined asperplexity
+the exp of this cross-entropy:
+
+Perplexity(W ) = 2H(W )
+
+= P(w1w2 . . .wN)?
+1
+N
+
+= N
+
+?
+1
+
+P(w1w2 . . .wN)
+
+= N
+
+???? N?
+i=1
+
+1
+P(wi|w1 . . .wi?1)
+
+(4.50)
+
+4.8 Summary
+
+This chapter introduced language modeling and the N-gram, one of the most widely
+used tools in language processing.
+
+• Language models offer a way to assign a probability to a sentence or other
+sequence of words, and to predict a word from preceding words.
+
+• N-grams are Markov models that estimate words from a fixed window of pre-
+vious words. N-gram probabilities can be estimated by counting in a corpus
+and normalizing (the maximum likelihood estimate).
+
+
+
+24 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+• N-gram language models are evaluated extrinsically in some task, or intrin-
+sically using perplexity.
+
+• The perplexity of a test set according to a language model is the geometric
+mean of the inverse test set probability computed by the model.
+
+• Smoothing algorithms provide a more sophisticated way to estimat the prob-
+ability of N-grams. Commonly used smoothing algorithms for N-grams rely
+on lower-order N-gram counts through backoff or interpolation.
+
+• Both backoff and interpolation require discounting to create a probability dis-
+tribution.
+
+• Kneser-Ney smoothing makes use of the probability of a word being a novel
+continuation. The interpolated Kneser-Ney smoothing algorithm mixes a
+discounted probability with a lower-order continuation probability.
+
+Bibliographical and Historical Notes
+The underlying mathematics of the N-gram was first proposed by Markov (1913),
+who used what are now called Markov chains (bigrams and trigrams) to predict
+whether an upcoming letter in Pushkin’s Eugene Onegin would be a vowel or a con-
+sonant. Markov classified 20,000 letters as V or C and computed the bigram and
+trigram probability that a given letter would be a vowel given the previous one or
+two letters. Shannon (1948) applied N-grams to compute approximations to English
+word sequences. Based on Shannon’s work, Markov models were commonly used in
+engineering, linguistic, and psychological work on modeling word sequences by the
+1950s. In a series of extremely influential papers starting with Chomsky (1956) and
+including Chomsky (1957) and Miller and Chomsky (1963), Noam Chomsky argued
+that “finite-state Markov processes”, while a possibly useful engineering heuristic,
+were incapable of being a complete cognitive model of human grammatical knowl-
+edge. These arguments led many linguists and computational linguists to ignore
+work in statistical modeling for decades.
+
+The resurgence of N-gram models came from Jelinek, Mercer, Bahl, and col-
+leagues at the IBM Thomas J. Watson Research Center, who were influenced by
+Shannon, and Baker at CMU, who was influenced by the work of Baum and col-
+leagues. Independently these two labs successfully used N-grams in their speech
+recognition systems (Baker 1990, Jelinek 1976, Baker 1975, Bahl et al. 1983, Je-
+linek 1990). A trigram model was used in the IBM TANGORA speech recognition
+system in the 1970s, but the idea was not written up until later.
+
+Add-one smoothing derives from Laplace’s 1812 law of succession and was first
+applied as an engineering solution to the zero-frequency problem by Jeffreys (1948)
+based on an earlier Add-K suggestion by Johnson (1932). Problems with the add-
+one algorithm are summarized in Gale and Church (1994).
+
+A wide variety of different language modeling and smoothing techniques were
+proposed in the 80s and 90s, including Good-Turing discounting—first applied to
+the N-gram smoothing at IBM by Katz (Na?das 1984, Church and Gale 1991)—
+Witten-Bell discounting (Witten and Bell, 1991), and varieties of class-based N-
+gram models that used information about word classes.class-basedN-gram
+
+Starting in the late 1990s, Chen and Goodman produced a highly influential
+series of papers with a comparison of different language models (Chen and Good-
+man 1996, Chen and Goodman 1998, Chen and Goodman 1999, Goodman 2006).
+They performed a number of carefully controlled experiments comparing differ-
+
+
+
+EXERCISES 25
+
+ent discounting algorithms, cache models, class-based models, and other language
+model parameters. They showed the advantages of Modified Interpolated Kneser-
+Ney, which has since become the standard baseline for language modeling, espe-
+cially because they showed that caches and class-based models provided only minor
+additional improvement. These papers are recommended for any reader with further
+interest in language modeling.
+
+Two commonly used toolkits for building language models are SRILM (Stolcke,
+2002) and KenLM (Heafield 2011, Heafield et al. 2013). Both are publicly available.
+SRILM offers a wider range of options and types of discounting, while KenLM is
+optimized for speed and memory size, making it possible to build web-scale lan-
+guage models.
+
+The highest accuracy language models at the time of this writing make use of
+neural nets. The problem with standard language models is that the number of pa-neural nets
+rameters increases exponentially as the N-gram order increases, and N-grams have
+no way to generalize from training to test set. Neural networks instead project words
+into a continuous space in which words with similar contexts have similar represen-
+tations. Both feedforward nets Bengio et al. 2006, Schwenk 2007 and recurrent
+nets (Mikolov, 2012) are used.
+
+Other important classes of language models are maximum entropy languagemaximumentropy
+models (Rosenfeld, 1996), based on logistic regression classifiers that use lots of
+features to help predict upcoming words. These classifiers can use the standard
+features presented in this chapter (i.e., the previous words) but also lots of other
+useful predictors, as can other kinds of discriminative language models (Roark et al.,
+2007). We’ll introduce logistic regression language modeling when we introduce
+classification in Chapter 7.
+
+Another important technique is language model adaptation, where we want toadaptation
+combine data from multiple domains (for example we might have less in-domain
+training data but more general data that we then need to adapt) (Bulyko et al. 2003,
+Bacchiani et al. 2004, Bellegarda 2004, Bacchiani et al. 2006, Hsu 2007, Liu et al. 2013).
+
+Exercises
+4.1 Write out the equation for trigram probability estimation (modifying Eq. 4.11).
+
+Now write out all the non-zero trigram probabilities for the I am Sam corpus
+on page 5.
+
+4.2 Calculate the probability of the sentence i want chinese food. Give two
+probabilities, one using Fig. 4.2, and another using the add-1 smoothed table
+in Fig. 4.6.
+
+4.3 Which of the two probabilities you computed in the previous exercise is higher,
+unsmoothed or smoothed? Explain why.
+
+4.4 We are given the following corpus, modified from the one in the chapter:
+
+<s> I am Sam </s>
+
+<s> Sam I am </s>
+
+<s> I am Sam </s>
+
+<s> I do not like green eggs and Sam </s>
+
+Using a bigram language model with add-one smoothing, what is P(Sam |
+am)? Include <s> and </s> in your counts just like any other token.
+
+
+
+26 CHAPTER 4 • LANGUAGE MODELING WITH N-GRAMS
+
+4.5 Suppose we didn’t use the end-symbol </s>. Train an unsmoothed bigram
+grammar on the following training corpus without using the end-symbol </s>:
+
+<s> a b
+
+<s> b b
+
+<s> b a
+
+<s> a a
+
+Demonstrate that your bigram model does not assign a single probability dis-
+tribution across all sentence lengths by showing that the sum of the probability
+of the four possible 2 word sentences over the alphabet {a,b} is 1.0, and the
+sum of the probability of all possible 3 word sentences over the alphabet {a,b}
+is also 1.0.
+
+4.6 Suppose we train a trigram language model with add-one smoothing on a
+given corpus. The corpus contains V word types. Express a formula for esti-
+mating P(w3|w1,w2), where w3 is a word which follows the bigram (w1,w2),
+in terms of various N-gram counts and V. Use the notation c(w1,w2,w3) to
+denote the number of times that trigram (w1,w2,w3) occurs in the corpus, and
+so on for bigrams and unigrams.
+
+4.7 We are given the following corpus, modified from the one in the chapter:
+
+<s> I am Sam </s>
+
+<s> Sam I am </s>
+
+<s> I am Sam </s>
+
+<s> I do not like green eggs and Sam </s>
+
+If we use linear interpolation smoothing between a maximum-likelihood bi-
+gram model and a maximum-likelihood unigram model with ?1 = 12 and ?2 =
+1
+2 , what is P(Sam|am)? Include <s> and </s>\verb in your counts just like
+any other token.
+
+4.8 Write a program to compute unsmoothed unigrams and bigrams.
+
+4.9 Run your N-gram program on two different small corpora of your choice (you
+might use email text or newsgroups). Now compare the statistics of the two
+corpora. What are the differences in the most common unigrams between the
+two? How about interesting differences in bigrams?
+
+4.10 Add an option to your program to generate random sentences.
+
+4.11 Add an option to your program to compute the perplexity of a test set.
+
+
+
+Exercises 27
+
+Algoet, P. H. and Cover, T. M. (1988). A sandwich proof of
+the Shannon-McMillan-Breiman theorem. The Annals of
+Probability, 16(2), 899–909.
+
+Bacchiani, M., Riley, M., Roark, B., and Sproat, R. (2006).
+Map adaptation of stochastic grammars. Computer Speech
+& Language, 20(1), 41–68.
+
+Bacchiani, M., Roark, B., and Saraclar, M. (2004). Language
+model adaptation with MAP estimation and the perceptron
+algorithm. In HLT-NAACL-04, pp. 21–24.
+
+Bahl, L. R., Jelinek, F., and Mercer, R. L. (1983). A max-
+imum likelihood approach to continuous speech recogni-
+tion. IEEE Transactions on Pattern Analysis and Machine
+Intelligence, 5(2), 179–190.
+
+Baker, J. K. (1975). The DRAGON system – An overview.
+IEEE Transactions on Acoustics, Speech, and Signal Pro-
+cessing, ASSP-23(1), 24–29.
+
+Baker, J. K. (1975/1990). Stochastic modeling for auto-
+matic speech understanding. In Waibel, A. and Lee, K.-
+F. (Eds.), Readings in Speech Recognition, pp. 297–307.
+Morgan Kaufmann. Originally appeared in Speech Recog-
+nition, Academic Press, 1975.
+
+Bellegarda, J. R. (2004). Statistical language model adap-
+tation: Review and perspectives. Speech Communication,
+42(1), 93–108.
+
+Bengio, Y., Schwenk, H., Sene?cal, J.-S., Morin, F., and Gau-
+vain, J.-L. (2006). Neural probabilistic language models. In
+Innovations in Machine Learning, pp. 137–186. Springer.
+
+Brants, T., Popat, A. C., Xu, P., Och, F. J., and Dean, J.
+(2007). Large language models in machine translation. In
+EMNLP/CoNLL 2007.
+
+Buck, C., Heafield, K., and Van Ooyen, B. (2014). N-gram
+counts and language models from the common crawl. In
+Proceedings of LREC.
+
+Bulyko, I., Ostendorf, M., and Stolcke, A. (2003). Get-
+ting more mileage from web text sources for conversational
+speech language modeling using class-dependent mixtures.
+In HLT-NAACL-03, Edmonton, Canada, Vol. 2, pp. 7–9.
+
+Chen, S. F. and Goodman, J. (1996). An empirical study of
+smoothing techniques for language modeling. In ACL-96,
+Santa Cruz, CA, pp. 310–318.
+
+Chen, S. F. and Goodman, J. (1998). An empirical study of
+smoothing techniques for language modeling. Tech. rep.
+TR-10-98, Computer Science Group, Harvard University.
+
+Chen, S. F. and Goodman, J. (1999). An empirical study of
+smoothing techniques for language modeling. Computer
+Speech and Language, 13, 359–394.
+
+Chomsky, N. (1956). Three models for the description of
+language. IRE Transactions on Information Theory, 2(3),
+113–124.
+
+Chomsky, N. (1957). Syntactic Structures. Mouton, The
+Hague.
+
+Church, K. W. and Gale, W. A. (1991). A comparison of
+the enhanced Good-Turing and deleted estimation methods
+for estimating probabilities of English bigrams. Computer
+Speech and Language, 5, 19–54.
+
+Church, K. W., Hart, T., and Gao, J. (2007). Compress-
+ing trigram language models with Golomb coding. In
+EMNLP/CoNLL 2007, pp. 199–207.
+
+Cover, T. M. and Thomas, J. A. (1991). Elements of Infor-
+mation Theory. Wiley.
+
+Franz, A. and Brants, T. (2006). All our n-gram are belong to
+you. http://googleresearch.blogspot.com/2006/
+08/all-our-n-gram-are-belong-to-you.html.
+
+Gale, W. A. and Church, K. W. (1994). What is wrong
+with adding one?. In Oostdijk, N. and de Haan, P.
+(Eds.), Corpus-Based Research into Language, pp. 189–
+198. Rodopi.
+
+Goodman, J. (2006). A bit of progress in language mod-
+eling: Extended version. Tech. rep. MSR-TR-2001-72,
+Machine Learning and Applied Statistics Group, Microsoft
+Research, Redmond, WA.
+
+Heafield, K. (2011). KenLM: Faster and smaller language
+model queries. In Workshop on Statistical Machine Trans-
+lation, pp. 187–197.
+
+Heafield, K., Pouzyrevsky, I., Clark, J. H., and Koehn, P.
+(2013). Scalable modified Kneser-Ney language model es-
+timation.. In ACL 2013, pp. 690–696.
+
+Hsu, B.-J. (2007). Generalized linear interpolation of lan-
+guage models. In IEEE ASRU-07, pp. 136–140.
+
+Jeffreys, H. (1948). Theory of Probability (2nd Ed.). Claren-
+don Press. Section 3.23.
+
+Jelinek, F. (1976). Continuous speech recognition by statis-
+tical methods. Proceedings of the IEEE, 64(4), 532–557.
+
+Jelinek, F. (1990). Self-organized language modeling for
+speech recognition. In Waibel, A. and Lee, K.-F. (Eds.),
+Readings in Speech Recognition, pp. 450–506. Morgan
+Kaufmann. Originally distributed as IBM technical report
+in 1985.
+
+Jelinek, F. and Mercer, R. L. (1980). Interpolated estimation
+of Markov source parameters from sparse data. In Gelsema,
+E. S. and Kanal, L. N. (Eds.), Proceedings, Workshop on
+Pattern Recognition in Practice, pp. 381–397. North Hol-
+land.
+
+Johnson, W. E. (1932). Probability: deductive and inductive
+problems (appendix to). Mind, 41(164), 421–423.
+
+Jurafsky, D., Wooters, C., Tajchman, G., Segal, J., Stolcke,
+A., Fosler, E., and Morgan, N. (1994). The Berkeley restau-
+rant project. In ICSLP-94, Yokohama, Japan, pp. 2139–
+2142.
+
+Kneser, R. and Ney, H. (1995). Improved backing-off for
+M-gram language modeling. In ICASSP-95, Vol. 1, pp.
+181–184.
+
+Liu, X., Gales, M. J. F., and Woodland, P. C. (2013). Use of
+contexts in language model interpolation and adaptation.
+Computer Speech & Language, 27(1), 301–321.
+
+Markov, A. A. (1913). Essai d’une recherche statistique sur
+le texte du roman “Eugene Onegin” illustrant la liaison des
+epreuve en chain (‘Example of a statistical investigation of
+the text of “Eugene Onegin” illustrating the dependence be-
+tween samples in chain’). Izvistia Imperatorskoi Akademii
+Nauk (Bulletin de l’Acade?mie Impe?riale des Sciences de
+St.-Pe?tersbourg), 7, 153–162.
+
+Mikolov, T. (2012). Statistical language models based on
+neural networks. Ph.D. thesis, Ph. D. thesis, Brno Univer-
+sity of Technology.
+
+Miller, G. A. and Chomsky, N. (1963). Finitary models of
+language users. In Luce, R. D., Bush, R. R., and Galanter,
+E. (Eds.), Handbook of Mathematical Psychology, Vol. II,
+pp. 419–491. John Wiley.
+
+http://googleresearch.blogspot.com/2006/08/all-our-n-gram-are-belong-to-you.html
+http://googleresearch.blogspot.com/2006/08/all-our-n-gram-are-belong-to-you.html
+
+
+28 Chapter 4 • Language Modeling with N-grams
+
+Miller, G. A. and Selfridge, J. A. (1950). Verbal context
+and the recall of meaningful material. American Journal of
+Psychology, 63, 176–185.
+
+Na?das, A. (1984). Estimation of probabilities in the language
+model of the IBM speech recognition system. IEEE Trans-
+actions on Acoustics, Speech, Signal Processing, 32(4),
+859–861.
+
+Newell, A., Langer, S., and Hickey, M. (1998). The ro?le of
+natural language processing in alternative and augmenta-
+tive communication. Natural Language Engineering, 4(1),
+1–16.
+
+Roark, B., Saraclar, M., and Collins, M. (2007). Discrim-
+inative n-gram language modeling. Computer Speech &
+Language, 21(2), 373–392.
+
+Rosenfeld, R. (1996). A maximum entropy approach to
+adaptive statistical language modeling. Computer Speech
+and Language, 10, 187–228.
+
+Russell, S. and Norvig, P. (2002). Artificial Intelligence: A
+Modern Approach (2nd Ed.). Prentice Hall.
+
+Schwenk, H. (2007). Continuous space language models.
+Computer Speech & Language, 21(3), 492–518.
+
+Shannon, C. E. (1948). A mathematical theory of commu-
+nication. Bell System Technical Journal, 27(3), 379–423.
+Continued in the following volume.
+
+Shannon, C. E. (1951). Prediction and entropy of printed
+English. Bell System Technical Journal, 30, 50–64.
+
+Stolcke, A. (1998). Entropy-based pruning of backoff lan-
+guage models. In Proc. DARPA Broadcast News Tran-
+scription and Understanding Workshop, Lansdowne, VA,
+pp. 270–274.
+
+Stolcke, A. (2002). SRILM – an extensible language model-
+ing toolkit. In ICSLP-02, Denver, CO.
+
+Talbot, D. and Osborne, M. (2007). Smoothed Bloom Fil-
+ter Language Models: Tera-Scale LMs on the Cheap. In
+EMNLP/CoNLL 2007, pp. 468–476.
+
+Witten, I. H. and Bell, T. C. (1991). The zero-frequency
+problem: Estimating the probabilities of novel events in
+adaptive text compression. IEEE Transactions on Informa-
+tion Theory, 37(4), 1085–1094.
+
+
+	Language Modeling with N-grams
+	N-Grams
+	Evaluating Language Models 
+	Perplexity
+
+	Generalization and Zeros
+	Unknown Words
+
+	Smoothing
+	Laplace Smoothing
+	Add-k smoothing
+	Backoff and Interpolation
+
+	Kneser-Ney Smoothing
+	The Web and Stupid Backoff
+	Advanced: Perplexity's Relation to Entropy
+	Summary
+	Bibliographical and Historical Notes
+	Exercises
+
+

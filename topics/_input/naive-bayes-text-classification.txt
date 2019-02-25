@@ -1,0 +1,1699 @@
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+The	  Task	  of	  Text	  
+Classification
+
+
+
+Is	  this	  spam?
+
+
+
+Who	  wrote	  which	  Federalist	  papers?
+
+• 1787-­?8:	  anonymous	  essays	  try	  to	  convince	  New	  York	  
+to	  ratify	  U.S	  Constitution:	   Jay,	  Madison,	  Hamilton.	  	  
+
+• Authorship	  of	  12	  of	  the	  letters	  in	  dispute
+• 1963:	  solved	  by	  Mosteller and	  Wallace	  using	  
+
+Bayesian	  methods
+
+James	  Madison Alexander	  Hamilton
+
+
+
+Male	  or	  female	  author?
+
+1. By	  1925	  present-­?day	  Vietnam	  was	  divided	  into	  three	  parts	  
+under	  French	  colonial	  rule.	  The	  southern	  region	  embracing	  
+Saigon	  and	  the	  Mekong	  delta	  was	  the	  colony	  of	  Cochin-­?China;	  
+the	  central	  area	  with	  its	  imperial	  capital	  at	  Hue	  was	  the	  
+protectorate	  of	  Annam…
+
+2. Clara	  never	  failed	  to	  be	  astonished	  by	  the	  extraordinary	  felicity	  
+of	  her	  own	  name.	  She	  found	  it	  hard	  to	  trust	  herself	  to	  the	  
+mercy	  of	  fate,	  which	  had	  managed	  over	  the	  years	  to	  convert	  
+her	  greatest	  shame	  into	  one	  of	  her	  greatest	  assets…
+
+S.	  Argamon,	  M.	  Koppel,	  J.	  Fine,	  A.	  R.	  Shimoni,	  2003.	  “Gender,	  Genre,	  and	  Writing	  Style	   in	  Formal	  Written	  Texts,”	  Text,	  volume	  23,	  number	  3,	  pp.	  
+321–346
+
+
+
+Positive	  or	  negative	  movie	  review?
+
+• unbelievably	  disappointing	  
+• Full	  of	  zany	  characters	  and	  richly	  applied	  satire,	  and	  some	  
+
+great	  plot	  twists
+• this	  is	  the	  greatest	  screwball	  comedy	  ever	  filmed
+• It	  was	  pathetic.	  The	  worst	  part	  about	  it	  was	  the	  boxing	  
+
+scenes.
+
+5
+
+
+
+What	  is	  the	  subject	  of	  this	  article?
+
+• Antogonists and	  Inhibitors
+• Blood	  Supply
+• Chemistry
+• Drug	  Therapy
+• Embryology
+• Epidemiology
+• …
+
+6
+
+MeSH Subject	  Category	  Hierarchy
+
+?
+
+MEDLINE Article
+
+
+
+Text	  Classification
+
+• Assigning	  subject	  categories,	  topics,	  or	  genres
+• Spam	  detection
+• Authorship	  identification
+• Age/gender	  identification
+• Language	  Identification
+• Sentiment	  analysis
+• …
+
+
+
+Text	  Classification:	  definition
+
+• Input:
+• a	  document	  d
+• a	  fixed	  set	  of	  classes	  	  C	  = {c1,	  c2,…,	  cJ}
+
+• Output:	  a	  predicted	  class	  c ? C
+
+
+
+Classification	  Methods:	  
+Hand-­?coded	  rules
+
+• Rules	  based	  on	  combinations	  of	  words	  or	  other	  features
+• spam:	  black-­?list-­?address	  OR	  (“dollars”	  AND“have been	  selected”)
+
+• Accuracy	  can	  be	  high
+• If	  rules	  carefully	  refined	  by	  expert
+
+• But	  building	  and	  maintaining	  these	  rules	  is	  expensive
+
+
+
+Classification	  Methods:
+Supervised	  Machine	  Learning
+
+• Input:	  
+• a	  document	  d
+• a	  fixed	  set	  of	  classes	  	  C	  = {c1,	  c2,…,	  cJ}
+• A	  training	  set	  of	  m hand-­?labeled	  documents	  (d1,c1),....,(dm,cm)
+
+• Output:	  
+• a	  learned	  classifier	  ?:dà? c
+
+10
+
+
+
+Classification	  Methods:
+Supervised	  Machine	  Learning
+
+• Any	  kind	  of	  classifier
+• Naïve Bayes
+• Logistic	  regression
+• Support-­?vector	  machines
+• k-­?Nearest	  Neighbors
+
+• …
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+The	  Task	  of	  Text	  
+Classification
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Naïve Bayes	  (I)
+
+
+
+Naïve	  Bayes	  Intuition
+
+• Simple	  (“naïve”)	  classification	  method	  based	  on	  
+Bayes	  rule
+
+• Relies	  on	  very	  simple	  representation	  of	  document
+• Bag	  of	  words
+
+
+
+The	  Bag	  of	  Words	  Representation
+
+15
+
+it
+
+it
+
+it
+it
+
+it
+
+it
+
+I
+
+I
+
+I
+
+I
+
+I
+
+love
+
+recommend
+
+movie
+
+the
+the
+
+the
+
+the
+
+to
+
+to
+
+to
+
+and
+
+andand
+
+seen
+
+seen
+
+yet
+
+would
+
+with
+
+who
+
+whimsical
+
+whilewhenever
+
+times
+
+sweet
+
+several
+
+scenes
+
+satirical
+
+romantic
+of
+
+manages
+
+humor
+
+have
+
+happy
+
+fun
+
+friend
+
+fairy
+
+dialogue
+
+but
+
+conventions
+
+are
+anyone
+
+adventure
+
+always
+
+again
+
+about
+
+I love this movie! It's sweet, 
+but with satirical humor. The 
+dialogue is great and the 
+adventure scenes are fun... 
+It manages to be whimsical 
+and romantic while laughing 
+at the conventions of the 
+fairy tale genre. I would 
+recommend it to just about 
+anyone. I've seen it several 
+times, and I'm always happy 
+to see it again whenever I 
+have a friend who hasn't 
+seen it yet!
+
+it 
+I
+the
+to
+and
+seen
+yet
+would
+whimsical
+times
+sweet
+satirical
+adventure
+genre
+fairy
+humor
+have
+great
+…
+
+6 
+5
+4
+3
+3
+2
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+…
+
+it
+
+it
+
+it
+it
+
+it
+
+it
+
+I
+
+I
+
+I
+
+I
+
+I
+
+love
+
+recommend
+
+movie
+
+the
+the
+
+the
+
+the
+
+to
+
+to
+
+to
+
+and
+
+andand
+
+seen
+
+seen
+
+yet
+
+would
+
+with
+
+who
+
+whimsical
+
+whilewhenever
+
+times
+
+sweet
+
+several
+
+scenes
+
+satirical
+
+romantic
+of
+
+manages
+
+humor
+
+have
+
+happy
+
+fun
+
+friend
+
+fairy
+
+dialogue
+
+but
+
+conventions
+
+are
+anyone
+
+adventure
+
+always
+
+again
+
+about
+
+I love this movie! It's sweet, 
+but with satirical humor. The 
+dialogue is great and the 
+adventure scenes are fun... 
+It manages to be whimsical 
+and romantic while laughing 
+at the conventions of the 
+fairy tale genre. I would 
+recommend it to just about 
+anyone. I've seen it several 
+times, and I'm always happy 
+to see it again whenever I 
+have a friend who hasn't 
+seen it yet!
+
+it 
+I
+the
+to
+and
+seen
+yet
+would
+whimsical
+times
+sweet
+satirical
+adventure
+genre
+fairy
+humor
+have
+great
+…
+
+6 
+5
+4
+3
+3
+2
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+…
+
+it
+
+it
+
+it
+it
+
+it
+
+it
+
+I
+
+I
+
+I
+
+I
+
+I
+
+love
+
+recommend
+
+movie
+
+the
+the
+
+the
+
+the
+
+to
+
+to
+
+to
+
+and
+
+andand
+
+seen
+
+seen
+
+yet
+
+would
+
+with
+
+who
+
+whimsical
+
+whilewhenever
+
+times
+
+sweet
+
+several
+
+scenes
+
+satirical
+
+romantic
+of
+
+manages
+
+humor
+
+have
+
+happy
+
+fun
+
+friend
+
+fairy
+
+dialogue
+
+but
+
+conventions
+
+are
+anyone
+
+adventure
+
+always
+
+again
+
+about
+
+I love this movie! It's sweet, 
+but with satirical humor. The 
+dialogue is great and the 
+adventure scenes are fun... 
+It manages to be whimsical 
+and romantic while laughing 
+at the conventions of the 
+fairy tale genre. I would 
+recommend it to just about 
+anyone. I've seen it several 
+times, and I'm always happy 
+to see it again whenever I 
+have a friend who hasn't 
+seen it yet!
+
+it 
+I
+the
+to
+and
+seen
+yet
+would
+whimsical
+times
+sweet
+satirical
+adventure
+genre
+fairy
+humor
+have
+great
+…
+
+6 
+5
+4
+3
+3
+2
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+…
+
+
+
+The	  bag	  of	  words	  representation
+
+?
+(
+
+)=c
+seen 2
+sweet 1
+
+whimsical 1
+
+recommend 1
+happy 1
+
+... ...
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Naïve Bayes	  (I)
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Formalizing	  the	  
+Naïve Bayes	  
+Classifier
+
+
+
+Bayes’	  Rule	  Applied	  to	  Documents	  and	  
+Classes
+
+P(c | d) = P(d | c)P(c)
+P(d)
+
+•For	  a	  document	  d and	  a	  class	  c
+
+
+
+Naïve Bayes	  Classifier	  (I)
+
+cMAP = argmax
+c?C
+
+P(c | d)
+
+= argmax
+c?C
+
+P(d | c)P(c)
+P(d)
+
+= argmax
+c?C
+
+P(d | c)P(c)
+
+MAP is “maximum a 
+posteriori”  = most 
+likely class
+
+Bayes Rule
+
+Dropping the 
+denominator
+
+
+
+Naïve Bayes	  Classifier	  (II)
+
+cMAP = argmax
+c?C
+
+P(d | c)P(c)
+
+Document d 
+represented as 
+features 
+x1..xn
+
+= argmax
+c?C
+
+P(x1, x2,…, xn | c)P(c)
+
+
+
+Naïve Bayes	  Classifier	  (IV)
+
+How often does this 
+class occur?
+
+cMAP = argmax
+c?C
+
+P(x1, x2,…, xn | c)P(c)
+
+O(|X|n•|C|)	  parameters
+
+We can just count the 
+relative frequencies in 
+a corpus
+
+Could	  only	  be	  estimated	  if	  a	  
+very,	  very	  large	  number	  of	  
+training	  examples	  was	  
+available.
+
+
+
+Multinomial	  Naïve Bayes	  Independence	  
+Assumptions
+
+P(x1, x2,…, xn | c)
+
+• Bag	  of	  Words	  assumption:	  Assume	  position	  doesn’t	  
+matter
+
+• Conditional	  Independence:	  Assume	  the	  feature	  
+probabilities	  P(xi|cj)	  are	  independent	  given	  the	  class	  c.
+
+P(x1,…, xn | c) = P(x1 | c)•P(x2 | c)•P(x3 | c)•...•P(xn | c)
+
+
+
+Multinomial	  Naïve Bayes	  Classifier
+
+cMAP = argmax
+c?C
+
+P(x1, x2,…, xn | c)P(c)
+
+cNB = argmax
+c?C
+
+P(cj ) P(x | c)
+x?X
+?
+
+
+
+Applying	  Multinomial	  Naive	  Bayes	  
+Classifiers	  to	  Text	  Classification
+
+cNB = argmax
+c j?C
+
+P(cj ) P(xi | cj )
+i?positions
+?
+
+positions ? all	  word	  positions	  in	  test	  document	  	  	  	  	  	  
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Formalizing	  the	  
+Naïve Bayes	  
+Classifier
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Naïve Bayes:	  
+Learning
+
+
+
+Learning	  the	  Multinomial	  Naïve Bayes	  Model
+
+• First	  attempt:	  maximum	  likelihood	  estimates
+• simply	  use	  the	  frequencies	  in	  the	  data
+
+Sec.13.3
+
+P?(wi | cj ) =
+count(wi,cj )
+count(w,cj )
+
+w?V
+?
+
+P?(cj ) =
+doccount(C = cj )
+
+Ndoc
+
+
+
+• Create	  mega-­?document	  for	  topic	  j by	  concatenating	  all	  docs	  in	  
+this	  topic
+• Use	  frequency	  of	  w in	  mega-­?document
+
+Parameter	  estimation
+
+fraction	  of	  times	  word	  wi appears	  
+among	  all	  words	  in	  documents	  of	  topic	  cj
+
+P?(wi | cj ) =
+count(wi,cj )
+count(w,cj )
+
+w?V
+?
+
+
+
+Problem	  with	  Maximum	  Likelihood
+
+• What	  if	  we	  have	  seen	  no	  training	  documents	  with	  the	  word	  
+fantastic and	  classified	  in	  the	  topic	  positive (thumbs-­?up)?
+
+• Zero	  probabilities	  cannot	  be	  conditioned	  away,	  no	  matter	  
+the	  other	  evidence!
+
+P?("fantastic" positive) =  count("fantastic", positive)
+count(w, positive
+
+w?V
+? )
+
+ =  0
+
+cMAP = argmaxc P?(c) P?(xi | c)i?
+
+Sec.13.3
+
+
+
+Laplace	  (add-­?1)	  smoothing	  for	  Naïve Bayes
+
+P?(wi | c) =
+count(wi,c)+1
+count(w,c)+1( )
+
+w?V
+?
+
+=
+count(wi,c)+1
+
+count(w,c
+w?V
+? )
+
+#
+
+$
+%%
+
+&
+
+'
+((  +  V
+
+P?(wi | c) =
+count(wi,c)
+count(w,c)( )
+
+w?V
+?
+
+
+
+Multinomial	  Naïve	  Bayes:	  Learning
+
+• Calculate	  P(cj) terms
+• For	  each	  cj in	  C do
+
+docsj ? all	  docs	  with	  	  class	  =cj
+
+P(wk | cj )?
+nk +?
+
+n+? |Vocabulary |
+P(cj )?
+
+| docsj |
+| total # documents|
+
+• Calculate	  P(wk | cj) terms
+• Textj? single	  doc	  containing	  all	  docsj
+• Foreach	  word	  wk in	  Vocabulary
+
+nk? #	  of	  occurrences	  of	  wk in	  Textj
+
+• From	  training	  corpus,	  extract	  Vocabulary
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Naïve Bayes:	  
+Learning
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Naïve Bayes:	  
+Relationship	  to	  
+
+Language	  Modeling
+
+
+
+Generative	  Model	  for	  Multinomial	  Naïve Bayes
+
+35
+
+c=China
+
+X1=Shanghai X2=and X3=Shenzhen X4=issue X5=bonds
+
+
+
+Naïve Bayes	  and	  Language	  Modeling
+
+• Naïve bayes classifiers	  can	  use	  any	  sort	  of	  feature
+• URL,	  email	  address,	  dictionaries,	  network	  features
+
+• But	  if,	  as	  in	  the	  previous	  slides
+• We	  use	  only word	  features	  
+• we	  use	  all of	  the	  words	  in	  the	  text	  (not	  a	  subset)
+
+• Then	  
+• Naïve bayes has	  an	  important	  similarity	  to	  language	  
+modeling.36
+
+
+
+Each	  class	  =	  a	  unigram	  language	  model
+
+• Assigning	  each	  word:	  P(word	  |	  c)
+• Assigning	  each	  sentence:	  P(s|c)=? P(word|c)
+
+0.1 I
+
+0.1 love
+
+0.01 this
+
+0.05 fun
+
+0.1 film
+
+…
+
+I love this fun film
+
+0.1 0.1 .05 0.01 0.1
+
+Class	  pos
+
+P(s	  |	  pos)	  =	  0.0000005	  
+
+Sec.13.2.1
+
+
+
+Naïve Bayes	  as	  a	  Language	  Model
+
+• Which	  class	  assigns	  the	  higher	  probability	  to	  s?
+
+0.1 I
+
+0.1 love
+
+0.01 this
+
+0.05 fun
+
+0.1 film
+
+Model	  pos Model	  neg
+
+filmlove this funI
+
+0.10.1 0.01 0.050.1
+0.10.001 0.01 0.0050.2
+
+P(s|pos)	  	  >	  	  P(s|neg)
+
+0.2 I
+
+0.001 love
+
+0.01 this
+
+0.005 fun
+
+0.1 film
+
+Sec.13.2.1
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Naïve Bayes:	  
+Relationship	  to	  
+
+Language	  Modeling
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Multinomial	  Naïve
+Bayes:	  A	  Worked	  
+
+Example
+
+
+
+Choosing	  a	  class:
+P(c|d5)	  
+
+P(j|d5)	   1/4	  *	  (2/9)3 *	  2/9	  *	  2/9	  
+?	  0.0001
+
+Doc Words Class
+Training 1 Chinese Beijing	  Chinese c
+
+2 Chinese	  Chinese	  Shanghai c
+3 Chinese	  Macao c
+4 Tokyo	  Japan	  Chinese j
+
+Test 5 Chinese	  Chinese	  Chinese	  Tokyo Japan ?
+
+41
+
+Conditional	  Probabilities:
+P(Chinese|c)	  =
+P(Tokyo|c)	  	  	  	  =
+P(Japan|c)	  	  	  	  	  =
+P(Chinese|j)	  =
+P(Tokyo|j)	  	  	  	  	  =
+P(Japan|j)	  	  	  	  	  	  =	  
+
+Priors:
+P(c)=	  
+P(j)=	  
+
+3
+4 1
+
+4
+
+P?(w | c) = count(w,c)+1
+count(c)+ |V |
+
+P?(c) = Nc
+N
+
+(5+1)	  /	  (8+6)	  =	  6/14	  =	  3/7
+(0+1)	  /	  (8+6)	  =	  1/14
+
+(1+1)	  /	  (3+6)	  =	  2/9	  
+(0+1)	  /	  (8+6)	  =	  1/14
+
+(1+1)	  /	  (3+6)	  =	  2/9	  
+(1+1)	  /	  (3+6)	  =	  2/9	  
+
+3/4	  *	  (3/7)3 *	  1/14	  *	  1/14	  
+?	  0.0003
+
+?
+
+?
+
+
+
+Naïve Bayes	  in	  Spam	  Filtering
+
+• SpamAssassin Features:
+• Mentions	  Generic	  Viagra
+• Online	  Pharmacy
+• Mentions	  millions	  of	  (dollar)	  ((dollar)	  NN,NNN,NNN.NN)
+• Phrase:	  impress	  ...	  girl
+• From:	  starts	  with	  many	  numbers
+• Subject	  is	  all	  capitals
+• HTML	  has	  a	  low	  ratio	  of	  text	  to	  image	  area
+• One	  hundred	  percent	  guaranteed
+• Claims	  you	  can	  be	  removed	  from	  the	  list
+• 'Prestigious	  Non-­?Accredited	  Universities'
+• http://spamassassin.apache.org/tests_3_3_x.html
+
+
+
+Summary:	  Naive	  Bayes	  is	  Not	  So	  Naive
+
+• Very	  Fast,	  low	  storage	  requirements
+• Robust	  to	  Irrelevant	  Features
+
+Irrelevant	  Features	  cancel	  each	  other	  without	  affecting	  results
+
+• Very	  good	  in	  domains	  with	  many	  equally	  important	  features
+Decision	  Trees	  suffer	  from	  fragmentation in	  such	  cases	  – especially	  if	  little	  data
+
+• Optimal	  if	  the	  independence	  assumptions	  hold:	  If	  assumed	  
+independence	  is	  correct,	  then	  it	  is	  the	  Bayes	  Optimal	  Classifier	  for	  problem
+
+• A	  good	  dependable	  baseline	  for	  text	  classification
+• But	  we	  will	  see	  other	  classifiers	  that	  give	  better	  accuracy
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Multinomial	  Naïve
+Bayes:	  A	  Worked	  
+
+Example
+
+
+
+Text	  Classification	  
+and	  Naïve Bayes
+
+Precision,	  Recall,	  and	  
+the	  F	  measure
+
+
+
+The	  2-­?by-­?2	  contingency	  table
+
+correct not	  correct
+selected tp fp
+
+not	  selected fn tn
+
+
+
+Precision	  and	  recall
+
+• Precision:	  %	  of	  selected	  items	  that	  are	  correct
+Recall:	  %	  of	  correct	  items	  that	  are	  selected
+
+correct not	  correct
+selected tp fp
+
+not	  selected fn tn
+
+
+
+A	  combined	  measure:	  F
+
+• A	  combined	  measure	  that	  assesses	  the	  P/R	  tradeoff	  is	  F	  measure	  
+(weighted	  harmonic	  mean):
+
+• The	  harmonic	  mean	  is	  a	  very	  conservative	  average;	  see	  IIR§
+8.3
+
+• People	  usually	  use	  balanced	  F1	  measure
+• i.e.,	  with	  ? =	  1	  (that	  is,	  ? =	  ½):	  	  	   F =	  2PR/(P+R)
+
+RP
+PR
+
+RP
+
+F
++
+
++
+=
+
+?+
+= 2
+
+2 )1(
+1)1(1
+
+1
+?
+?
+
+??
+
+
+
+Text	  Classification	  
+and	  Naïve Bayes
+
+Precision,	  Recall,	  and	  
+the	  F	  measure
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Text	  Classification:	  
+Evaluation
+
+
+
+51
+
+More	  Than	  Two	  Classes:	  
+Sets	  of	  binary	  classifiers
+
+• Dealing	  with	  any-­?of	  or	  multivalue classification
+• A	  document	  can	  belong	  to	  0,	  1,	  or	  >1	  classes.
+
+• For	  each	  class	  c?C
+• Build	  a	  classifier	  ?c to	  distinguish	  c from	  all	  other	  classes	  c’	  ?C
+
+• Given	  test	  doc	  d,	  
+• Evaluate	  it	  for	  membership	  in	  each	  class	  using	  each	  ?c
+• d belongs	  to	  any class	  for	  which ?c returns	  true
+
+Sec.14.5
+
+
+
+52
+
+More	  Than	  Two	  Classes:	  
+Sets	  of	  binary	  classifiers
+
+• One-­?of	  or	  multinomial	  classification
+• Classes	  are	  mutually	  exclusive:	  	  each	  document	  in	  exactly	  one	  class
+
+• For	  each	  class	  c?C
+• Build	  a	  classifier	  ?c to	  distinguish	  c from	  all	  other	  classes	  c’	  ?C
+
+• Given	  test	  doc	  d,	  
+• Evaluate	  it	  for	  membership	  in	  each	  class	  using	  each	  ?c
+• d belongs	  to	  the	  one class	  with	  maximum	  score
+
+Sec.14.5
+
+
+
+53
+
+• Most	  (over)used	  data	  set,	  21,578	  docs	  (each	  90	  types,	  200	  toknens)
+• 9603	  training,	  3299	  test	  articles	  (ModApte/Lewis	  split)
+• 118	  categories
+
+• An	  article	  can	  be	  in	  more	  than	  one	  category
+• Learn	  118	  binary	  category	  distinctions
+
+• Average	  document	  (with	  at	  least	  one	  category)	  has	  1.24	  classes
+• Only	  about	  10	  out	  of	  118	  categories	  are	  large
+
+Common categories
+(#train, #test)
+
+Evaluation:	  
+Classic	  Reuters-­?21578	  Data	  Set	  
+
+• Earn  (2877,  1087)  
+• Acquisitions  (1650,  179)
+• Money-­fx (538,  179)
+• Grain  (433,  149)
+• Crude  (389,  189)
+
+• Trade  (369,119)
+• Interest  (347,  131)
+• Ship  (197,  89)
+• Wheat  (212,  71)
+• Corn  (182,  56)
+
+Sec. 15.2.4
+
+
+
+54
+
+Reuters	  Text	  Categorization	  data	  set	  
+(Reuters-­?21578)	  document
+
+<REUTERS TOPICS="YES" LEWISSPLIT="TRAIN" CGISPLIT="TRAINING-SET" OLDID="12981" 
+NEWID="798">
+
+<DATE> 2-MAR-1987 16:51:43.42</DATE>
+
+<TOPICS><D>livestock</D><D>hog</D></TOPICS>
+
+<TITLE>AMERICAN PORK CONGRESS KICKS OFF TOMORROW</TITLE>
+
+<DATELINE>    CHICAGO, March 2 - </DATELINE><BODY>The American Pork Congress kicks off tomorrow, 
+March 3, in Indianapolis with 160 of the nations pork producers from 44 member states determining industry positions 
+on a number of issues, according to the National Pork Producers Council, NPPC.
+
+Delegates to the three day Congress will be considering 26 resolutions concerning various issues, including the future 
+direction of farm policy and the tax law as it applies to the agriculture sector. The delegates will also debate whether to 
+endorse concepts of a national PRV (pseudorabies virus) control and eradication program, the NPPC said.
+
+A large trade show, in conjunction with the congress, will feature the latest in technology in all areas of the industry, 
+the NPPC added. Reuter
+
+&#3;</BODY></TEXT></REUTERS>
+
+Sec. 15.2.4
+
+
+
+Confusion	  matrix	  c
+• For	  each	  pair	  of	  classes	  <c1,c2>	  how	  many	  documents	  from	  c1
+
+were	  incorrectly	  assigned	  to	  c2?
+• c3,2:	  90	  wheat	  documents	  incorrectly	  assigned	  to	  poultry
+
+55
+
+Docs	  in	  test	  set Assigned
+UK
+
+Assigned	  
+poultry
+
+Assigned	  
+wheat
+
+Assigned	  
+coffee
+
+Assigned	  
+interest
+
+Assigned	  
+trade
+
+True	  UK 95 1 13 0 1 0
+
+True	  poultry 0 1 0 0 0 0
+
+True	  wheat 10 90 0 1 0 0
+
+True	  coffee 0 0 0 34 3 7
+
+True	  interest -­? 1 2 13 26 5
+
+True	  trade 0 0 2 14 5 10
+
+
+
+56
+
+Per	  class	  evaluation	  measures
+
+Recall:	  
+Fraction	  of	  docs	  in	  class	  i classified	  correctly:
+
+Precision:	  
+Fraction	  of	  docs	  assigned	  class	  i that	  are	  
+
+actually	  about	  class	  i:
+
+Accuracy:	  (1	  -­? error	  rate)	  
+Fraction	  of	  docs	  classified	  correctly:
+
+cii
+i
+?
+
+cij
+i
+?
+
+j
+?
+
+cii
+c ji
+
+j
+?
+
+cii
+cij
+
+j
+?
+
+Sec. 15.2.4
+
+
+
+57
+
+Micro-­? vs.	  Macro-­?Averaging
+
+• If	  we	  have	  more	  than	  one	  class,	  how	  do	  we	  combine	  
+multiple	  performance	  measures	  into	  one	  quantity?
+
+• Macroaveraging:	  Compute	  performance	  for	  each	  class,	  
+then	  average.
+
+• Microaveraging:	  Collect	  decisions	  for	  all	  classes,	  
+compute	  contingency	  table,	  evaluate.
+
+Sec. 15.2.4
+
+
+
+58
+
+Micro-­? vs.	  Macro-­?Averaging:	  Example
+
+Truth:	  
+yes
+
+Truth:	  
+no
+
+Classifier:	  yes 10 10
+
+Classifier:	  no 10 970
+
+Truth:	  
+yes
+
+Truth:	  
+no
+
+Classifier:	  yes 90 10
+
+Classifier:	  no 10 890
+
+Truth:	  
+yes
+
+Truth:	  
+no
+
+Classifier:	  yes 100 20
+
+Classifier:	  no 20 1860
+
+Class	  1 Class	  2 Micro	  Ave.	  Table
+
+Sec.	  15.2.4
+
+• Macroaveraged precision:	  (0.5	  +	  0.9)/2	  =	  0.7
+• Microaveraged precision:	  100/120	  =	  .83
+• Microaveraged score	  is	  dominated	  by	  score	  on	  common	  classes
+
+
+
+Development	  Test	  Sets	  and	  Cross-­?validation
+
+• Metric:	  P/R/F1	  	  or	  Accuracy
+• Unseen	  test	  set
+
+• avoid	  overfitting (‘tuning	  to	  the	  test	  set’)
+• more	  conservative	  estimate	  of	  performance
+
+• Cross-­?validation	  over	  multiple	  splits
+• Handle	  sampling	  errors	  from	  different	  datasets
+
+• Pool	  results	  over	  each	  split
+• Compute	  pooled	  dev set	  performance
+
+Training	  set Development Test Set Test	  Set
+
+Test	  Set
+
+Training	  Set
+
+Training	  SetDev Test
+
+Training	  Set
+
+Dev Test
+
+Dev Test
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Text	  Classification:	  
+Evaluation
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Text	  Classification:	  
+Practical	  Issues
+
+
+
+62
+
+The	  Real	  World
+
+• Gee,	  I’m	  building	  a	  text	  classifier	  for	  real,	  now!
+• What	  should	  I	  do?
+
+Sec. 15.3.1
+
+
+
+63
+
+No	  training	  data?
+Manually	  written	  rules
+
+If	  (wheat	  or	  grain)	  and	  not	  (whole	  or	  bread)	  then
+Categorize	  as	  grain
+
+• Need	  careful	  crafting	  
+• Human	  tuning	  on	  development	  data
+• Time-­?consuming:	  2	  days	  per	  class
+
+Sec. 15.3.1
+
+
+
+64
+
+Very	  little	  data?
+
+• Use	  Naïve Bayes
+• Naïve	  Bayes	  is	  a	  “high-­?bias”	  algorithm	  (Ng	  and	  Jordan	  2002	  NIPS)
+
+• Get	  more	  labeled	  data	  
+• Find	  clever	  ways	  to	  get	  humans	  to	  label	  data	  for	  you
+
+• Try	  semi-­?supervised	  training	  methods:
+• Bootstrapping,	  EM	  over	  unlabeled	  documents,	  …
+
+Sec. 15.3.1
+
+
+
+65
+
+A	  reasonable	  amount	  of	  data?
+
+• Perfect	  for	  all	  the	  clever	  classifiers
+• SVM
+• Regularized	  Logistic	  Regression
+
+• You	  can	  even	  use	  user-­?interpretable	  decision	  trees
+• Users	  like	  to	  hack
+• Management	  likes	  quick	  fixes
+
+Sec. 15.3.1
+
+
+
+66
+
+A	  huge	  amount	  of	  data?
+
+• Can	  achieve	  high	  accuracy!
+• At	  a	  cost:
+
+• SVMs	  (train	  time)	  or	  kNN (test	  time)	  can	  be	  too	  slow
+• Regularized	  logistic	  regression	  can	  be	  somewhat	  better
+
+• So	  Naïve	  Bayes	  can	  come	  back	  into	  its	  own	  again!
+
+Sec. 15.3.1
+
+
+
+67
+
+Accuracy	  as	  a	  function	  of	  data	  size
+
+• With	  enough	  data
+• Classifier	  may	  not	  matter
+
+Sec. 15.3.1
+
+Brill	  and	  Banko on	  spelling	  correction
+
+
+
+Real-­?world	  systems	  generally	  combine:
+
+• Automatic	  classification	  
+• Manual	  review	  of	  uncertain/difficult/"new”	  cases
+
+68
+
+
+
+Underflow	  Prevention:	  log	  space
+
+• Multiplying	  lots	  of	  probabilities	  can	  result	  in	  floating-­?point	  underflow.
+• Since	  log(xy)	  =	  log(x)	  +	  log(y)
+
+• Better	  to	  sum	  logs	  of	  probabilities	  instead	  of	  multiplying	  probabilities.
+• Class	  with	  highest	  un-­?normalized	  log	  probability	  score	  is	  still	  most	  probable.
+
+• Model	  is	  now	  just	  max	  of	  sum	  of	  weights
+
+cNB = argmax
+c j?C
+
+logP(cj )+ logP(xi | cj )
+i?positions
+?
+
+
+
+70
+
+How	  to	  tweak	  performance
+
+• Domain-­?specific	  features	  and	  weights:	  very	  important	  in	  real	  
+performance
+
+• Sometimes	  need	  to	  collapse	  terms:
+• Part	  numbers,	  chemical	  formulas,	  …
+• But	  stemming	  generally	  doesn’t	  help
+
+• Upweighting:	  Counting	  a	  word	  as	  if	  it	  occurred	  twice:
+• title	  words	  (Cohen	  &	  Singer	  1996)
+• first	  sentence	  of	  each	  paragraph	  (Murata,	  1999)
+• In	  sentences	  that	  contain	  title	  words	  (Ko et	  al, 2002)
+
+Sec. 15.3.2
+
+
+
+Text	  Classification	  
+and	  Naïve	  Bayes
+
+Text	  Classification:	  
+Practical	  Issues
+
+

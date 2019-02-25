@@ -1,0 +1,1535 @@
+
+Speech and Language Processing. Daniel Jurafsky & James H. Martin. Copyright c© 2015. All
+rights reserved. Draft of June 26, 2015.
+
+CHAPTER
+
+22 Semantic Role Labeling
+Understanding events and their participants is a key part of understanding natural
+language. At a high level, understanding an event means being able to answer the
+question “Who did what to whom” (and perhaps also “when and where”). The
+answers to this question may be expressed in many different ways in the sentence.
+For example, if we want to process sentences to help us answer question about a
+purchase of stock by XYZ Corporation, we need to understand this event despite
+many different surface forms. The event could be described by a verb (sold, bought)
+or a noun (purchase), and XYZ Corp can be the syntactic subject (of bought) the
+indirect object (of sold), or in a genitive or noun compound relation (with the noun
+purchase), in the following sentences, despite having notationally the same role in
+all of them:
+
+• XYZ corporation bought the stock.
+• They sold the stock to XYZ corporation.
+• The stock was bought by XYZ corporation.
+• The purchase of the stock by XYZ corporation...
+• The stock purchase by XYZ corporation...
+In this chapter we introduce a level of representation that lets us capture the
+
+commonality between these sentences. We will be able to represent the fact that
+there was a purchase event, that the participants in this event were XYZ Corp and
+some stock, and that XYZ Corp played a specific role, the role of acquiring the stock.
+
+We call this shallow semantic representation level semantic roles. Semantic
+roles are representations that express the abstract role that arguments of a predicate
+can take in the event; these can be very specific, like the BUYER, abstract like the
+AGENT, or super-abstract (the PROTO-AGENT). These roles can both represent gen-
+eral semantic properties of the arguments and also express their likely relationship to
+the syntactic role of the argument in the sentence. AGENTS tend to be the subject of
+an active sentence, THEMES the direct object, and so on. These relations are codified
+in databases like PropBank and FrameNet. We’ll introduce semantic role labeling,
+the task of assigning roles to the constituents or phrases in sentences. We’ll also
+discuss selectional restrictions, the semantic sortal restrictions or preferences that
+each individual predicate can express about its potential arguments, such as the fact
+that the theme of the verb eat is generally something edible. Along the way, we’ll
+describe the various ways these representations can help in language understanding
+tasks like question answering and machine translation.
+
+22.1 Semantic Roles
+
+Consider how in Chapter 14 we represented the meaning of arguments for sentences
+like these:
+
+
+
+2 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+Thematic Role Definition
+AGENT The volitional causer of an event
+EXPERIENCER The experiencer of an event
+FORCE The non-volitional causer of the event
+THEME The participant most directly affected by an event
+RESULT The end product of an event
+CONTENT The proposition or content of a propositional event
+INSTRUMENT An instrument used in an event
+BENEFICIARY The beneficiary of an event
+SOURCE The origin of the object of a transfer event
+GOAL The destination of an object of a transfer event
+Figure 22.1 Some commonly used thematic roles with their definitions.
+
+(22.1) Sasha broke the window.
+
+(22.2) Pat opened the door.
+
+A neo-Davidsonian event representation of these two sentences would be
+
+?e,x,y Breaking(e)?Breaker(e,Sasha)
+?BrokenT hing(e,y)?Window(y)
+
+?e,x,y Opening(e)?Opener(e,Pat)
+?OpenedT hing(e,y)?Door(y)
+
+In this representation, the roles of the subjects of the verbs break and open are
+Breaker and Opener respectively. These deep roles are specific to each event; Break-deep roles
+ing events have Breakers, Opening events have Openers, and so on.
+
+If we are going to be able to answer questions, perform inferences, or do any
+further kinds of natural language understanding of these events, we’ll need to know
+a little more about the semantics of these arguments. Breakers and Openers have
+something in common. They are both volitional actors, often animate, and they have
+direct causal responsibility for their events.
+
+Thematic roles are a way to capture this semantic commonality between Break-Thematic roles
+ers and Eaters.
+
+We say that the subjects of both these verbs are agents. Thus, AGENT is theagents
+thematic role that represents an abstract idea such as volitional causation. Similarly,
+the direct objects of both these verbs, the BrokenThing and OpenedThing, are both
+prototypically inanimate objects that are affected in some way by the action. The
+semantic role for these participants is theme.theme
+
+Thematic roles are one of the oldest linguistic models, proposed first by the
+Indian grammarian Panini sometime between the 7th and 4th centuries BCE. Their
+modern formulation is due to Fillmore (1968) and Gruber (1965). Although there is
+no universally agreed-upon set of roles, Figs. 22.1 and 22.2 list some thematic roles
+that have been used in various computational papers, together with rough definitions
+and examples. Most thematic role sets have about a dozen roles, but we’ll see sets
+with smaller numbers of roles with even more abstract meanings, and sets with very
+large numbers of roles that are specific to situations. We’ll use the general term
+semantic roles for all sets of roles, whether small or large.semantic roles
+
+
+
+22.2 • DIATHESIS ALTERNATIONS 3
+
+Thematic Role Example
+AGENT The waiter spilled the soup.
+EXPERIENCER John has a headache.
+FORCE The wind blows debris from the mall into our yards.
+THEME Only after Benjamin Franklin broke the ice...
+RESULT The city built a regulation-size baseball diamond...
+CONTENT Mona asked “You met Mary Ann at a supermarket?”
+INSTRUMENT He poached catfish, stunning them with a shocking device...
+BENEFICIARY Whenever Ann Callahan makes hotel reservations for her boss...
+SOURCE I flew in from Boston.
+GOAL I drove to Portland.
+Figure 22.2 Some prototypical examples of various thematic roles.
+
+22.2 Diathesis Alternations
+
+The main reason computational systems use semantic roles is to act as a shallow
+meaning representation that can let us make simple inferences that aren’t possible
+from the pure surface string of words, or even from the parse tree. To extend the
+earlier examples, if a document says that Company A acquired Company B, we’d
+like to know that this answers the query Was Company B acquired? despite the fact
+that the two sentences have very different surface syntax. Similarly, this shallow
+semantics might act as a useful intermediate language in machine translation.
+
+Semantic roles thus help generalize over different surface realizations of pred-
+icate arguments. For example, while the AGENT is often realized as the subject of
+the sentence, in other cases the THEME can be the subject. Consider these possible
+realizations of the thematic arguments of the verb break:
+
+(22.3) John
+AGENT
+
+broke the window.
+THEME
+
+(22.4) John
+AGENT
+
+broke the window
+THEME
+
+with a rock.
+INSTRUMENT
+
+(22.5) The rock
+INSTRUMENT
+
+broke the window.
+THEME
+
+(22.6) The window
+THEME
+
+broke.
+
+(22.7) The window
+THEME
+
+was broken by John.
+AGENT
+
+These examples suggest that break has (at least) the possible arguments AGENT,
+THEME, and INSTRUMENT. The set of thematic role arguments taken by a verb is
+often called the thematic grid, ? -grid, or case frame. We can see that there arethematic grid
+
+case frame (among others) the following possibilities for the realization of these arguments of
+break:
+
+AGENT/Subject, THEME/Object
+AGENT/Subject, THEME/Object, INSTRUMENT/PPwith
+INSTRUMENT/Subject, THEME/Object
+THEME/Subject
+
+It turns out that many verbs allow their thematic roles to be realized in various
+syntactic positions. For example, verbs like give can realize the THEME and GOAL
+arguments in two different ways:
+
+
+
+4 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+(22.8) a. Doris
+AGENT
+
+gave the book
+THEME
+
+to Cary.
+GOAL
+
+b. Doris
+AGENT
+
+gave Cary
+GOAL
+
+the book.
+THEME
+
+These multiple argument structure realizations (the fact that break can take AGENT,
+INSTRUMENT, or THEME as subject, and give can realize its THEME and GOAL in
+either order) are called verb alternations or diathesis alternations. The alternationverbalternation
+we showed above for give, the dative alternation, seems to occur with particular se-dativealternation
+mantic classes of verbs, including “verbs of future having” (advance, allocate, offer,
+owe), “send verbs” (forward, hand, mail), “verbs of throwing” (kick, pass, throw),
+and so on. Levin (1993) lists for 3100 English verbs the semantic classes to which
+they belong (47 high-level classes, divided into 193 more specific classes) and the
+various alternations in which they participate. These lists of verb classes have been
+incorporated into the online resource VerbNet (Kipper et al., 2000), which links each
+verb to both WordNet and FrameNet entries.
+
+22.3 Semantic Roles: Problems with Thematic Roles
+
+Representing meaning at the thematic role level seems like it should be useful in
+dealing with complications like diathesis alternations. Yet it has proved quite diffi-
+cult to come up with a standard set of roles, and equally difficult to produce a formal
+definition of roles like AGENT, THEME, or INSTRUMENT.
+
+For example, researchers attempting to define role sets often find they need to
+fragment a role like AGENT or THEME into many specific roles. Levin and Rappa-
+port Hovav (2005) summarize a number of such cases, such as the fact there seem
+to be at least two kinds of INSTRUMENTS, intermediary instruments that can appear
+as subjects and enabling instruments that cannot:
+
+(22.9) a. The cook opened the jar with the new gadget.
+b. The new gadget opened the jar.
+
+(22.10) a. Shelly ate the sliced banana with a fork.
+b. *The fork ate the sliced banana.
+
+In addition to the fragmentation problem, there are cases in which we’d like to
+reason about and generalize across semantic roles, but the finite discrete lists of roles
+don’t let us do this.
+
+Finally, it has proved difficult to formally define the thematic roles. Consider the
+AGENT role; most cases of AGENTS are animate, volitional, sentient, causal, but any
+individual noun phrase might not exhibit all of these properties.
+
+These problems have led to alternative semantic role models that use eithersemantic role
+many fewer or many more roles.
+
+The first of these options is to define generalized semantic roles that abstract
+over the specific thematic roles. For example, PROTO-AGENT and PROTO-PATIENTproto-agent
+
+proto-patient are generalized roles that express roughly agent-like and roughly patient-like mean-
+ings. These roles are defined, not by necessary and sufficient conditions, but rather
+by a set of heuristic features that accompany more agent-like or more patient-like
+meanings. Thus, the more an argument displays agent-like properties (being voli-
+tionally involved in the event, causing an event or a change of state in another par-
+ticipant, being sentient or intentionally involved, moving) the greater the likelihood
+
+
+
+22.4 • THE PROPOSITION BANK 5
+
+that the argument can be labeled a PROTO-AGENT. The more patient-like the proper-
+ties (undergoing change of state, causally affected by another participant, stationary
+relative to other participants, etc.), the greater the likelihood that the argument can
+be labeled a PROTO-PATIENT.
+
+The second direction is instead to define semantic roles that are specific to a
+particular verb or a particular group of semantically related verbs or nouns.
+
+In the next two sections we describe two commonly used lexical resources that
+make use of these alternative versions of semantic roles. PropBank uses both proto-
+roles and verb-specific semantic roles. FrameNet uses semantic roles that are spe-
+cific to a general semantic idea called a frame.
+
+22.4 The Proposition Bank
+
+The Proposition Bank, generally referred to as PropBank, is a resource of sen-PropBank
+tences annotated with semantic roles. The English PropBank labels all the sentences
+in the Penn TreeBank; the Chinese PropBank labels sentences in the Penn Chinese
+TreeBank. Because of the difficulty of defining a universal set of thematic roles,
+the semantic roles in PropBank are defined with respect to an individual verb sense.
+Each sense of each verb thus has a specific set of roles, which are given only numbers
+rather than names: Arg0, Arg1, Arg2, and so on. In general, Arg0 represents the
+PROTO-AGENT, and Arg1, the PROTO-PATIENT. The semantics of the other roles
+are less consistent, often being defined specifically for each verb. Nonetheless there
+are some generalization; the Arg2 is often the benefactive, instrument, attribute, or
+end state, the Arg3 the start point, benefactive, instrument, or attribute, and the Arg4
+the end point.
+
+Here are some slightly simplified PropBank entries for one sense each of the
+verbs agree and fall. Such PropBank entries are called frame files; note that the
+definitions in the frame file for each role (“Other entity agreeing”, “Extent, amount
+fallen”) are informal glosses intended to be read by humans, rather than being formal
+definitions.
+
+(22.11) agree.01
+Arg0: Agreer
+Arg1: Proposition
+Arg2: Other entity agreeing
+
+Ex1: [Arg0 The group] agreed [Arg1 it wouldn’t make an offer].
+Ex2: [ArgM-TMP Usually] [Arg0 John] agrees [Arg2 with Mary]
+
+[Arg1 on everything].
+
+(22.12) fall.01
+Arg1: Logical subject, patient, thing falling
+Arg2: Extent, amount fallen
+Arg3: start point
+Arg4: end point, end state of arg1
+Ex1: [Arg1 Sales] fell [Arg4 to $25 million] [Arg3 from $27 million].
+Ex2: [Arg1 The average junk bond] fell [Arg2 by 4.2%].
+
+Note that there is no Arg0 role for fall, because the normal subject of fall is a
+PROTO-PATIENT.
+
+
+
+6 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+The PropBank semantic roles can be useful in recovering shallow semantic in-
+formation about verbal arguments. Consider the verb increase:
+
+(22.13) increase.01 “go up incrementally”
+Arg0: causer of increase
+Arg1: thing increasing
+Arg2: amount increased by, EXT, or MNR
+Arg3: start point
+Arg4: end point
+
+A PropBank semantic role labeling would allow us to infer the commonality in
+the event structures of the following three examples, that is, that in each case Big
+Fruit Co. is the AGENT and the price of bananas is the THEME, despite the differing
+surface forms.
+
+(22.14) [Arg0 Big Fruit Co. ] increased [Arg1 the price of bananas].
+(22.15) [Arg1 The price of bananas] was increased again [Arg0 by Big Fruit Co. ]
+(22.16) [Arg1 The price of bananas] increased [Arg2 5%].
+
+PropBank also has a number of non-numbered arguments called ArgMs, (ArgM-
+TMP, ArgM-LOC, etc) which represent modification or adjunct meanings. These are
+relatively stable across predicates, so aren’t listed with each frame file. Data labeled
+with these modifiers can be helpful in training systems to detect temporal, location,
+or directional modification across predicates. Some of the ArgM’s include:
+
+TMP when? yesterday evening, now
+LOC where? at the museum, in San Francisco
+DIR where to/from? down, to Bangkok
+MNR how? clearly, with much enthusiasm
+PRP/CAU why? because ... , in response to the ruling
+REC themselves, each other
+ADV miscellaneous
+PRD secondary predication ...ate the meat raw
+
+While PropBank focuses on verbs, a related project, NomBank (Meyers et al.,
+2004) adds annotations to noun predicates. For example the noun agreement in
+Apple’s agreement with IBM would be labeled with Apple as the Arg0 and IBM as
+the Arg2. This allows semantic role labelers to assign labels to arguments of both
+verbal and nominal predicates.
+
+22.5 FrameNet
+
+While making inferences about the semantic commonalities across different sen-
+tences with increase is useful, it would be even more useful if we could make such
+inferences in many more situations, across different verbs, and also between verbs
+and nouns. For example, we’d like to extract the similarity among these three sen-
+tences:
+
+(22.17) [Arg1 The price of bananas] increased [Arg2 5%].
+(22.18) [Arg1 The price of bananas] rose [Arg2 5%].
+(22.19) There has been a [Arg2 5%] rise [Arg1 in the price of bananas].
+
+Note that the second example uses the different verb rise, and the third example
+uses the noun rather than the verb rise. We’d like a system to recognize that the
+
+
+
+22.5 • FRAMENET 7
+
+price of bananas is what went up, and that 5% is the amount it went up, no matter
+whether the 5% appears as the object of the verb increased or as a nominal modifier
+of the noun rise.
+
+The FrameNet project is another semantic-role-labeling project that attemptsFrameNet
+to address just these kinds of problems (Baker et al. 1998, Fillmore et al. 2003,
+Fillmore and Baker 2009, Ruppenhofer et al. 2006). Whereas roles in the PropBank
+project are specific to an individual verb, roles in the FrameNet project are specific
+to a frame.
+
+What is a frame? Consider the following set of words:
+
+reservation, flight, travel, buy, price, cost, fare, rates, meal, plane
+
+There are many individual lexical relations of hyponymy, synonymy, and so on
+between many of the words in this list. The resulting set of relations does not,
+however, add up to a complete account of how these words are related. They are
+clearly all defined with respect to a coherent chunk of common-sense background
+information concerning air travel.
+
+We call the holistic background knowledge that unites these words a frame (Fill-frame
+more, 1985). The idea that groups of words are defined with respect to some back-
+ground information is widespread in artificial intelligence and cognitive science,
+where besides frame we see related works like a model (Johnson-Laird, 1983), ormodel
+even script (Schank and Abelson, 1977).script
+
+A frame in FrameNet is a background knowledge structure that defines a set of
+frame-specific semantic roles, called frame elements, and includes a set of predi-frame elements
+cates that use these roles. Each word evokes a frame and profiles some aspect of the
+frame and its elements. The FrameNet dataset includes a set of frames and frame
+elements, the lexical units associated with each frame, and a set of labeled example
+sentences.
+
+For example, the change position on a scale frame is defined as follows:
+
+This frame consists of words that indicate the change of an Item’s posi-
+tion on a scale (the Attribute) from a starting point (Initial value) to an
+end point (Final value).
+
+Some of the semantic roles (frame elements) in the frame are defined as in
+Fig. 22.3. Note that these are separated into core roles, which are frame specific, andCore roles
+non-core roles, which are more like the Arg-M arguments in PropBank, expressedNon-core roles
+more general properties of time, location, and so on.
+
+Here are some example sentences:
+
+(22.20) [ITEM Oil] rose [ATTRIBUTE in price] [DIFFERENCE by 2%].
+
+(22.21) [ITEM It] has increased [FINAL STATE to having them 1 day a month].
+
+(22.22) [ITEM Microsoft shares] fell [FINAL VALUE to 7 5/8].
+
+(22.23) [ITEM Colon cancer incidence] fell [DIFFERENCE by 50%] [GROUP among
+men].
+
+(22.24) a steady increase [INITIAL VALUE from 9.5] [FINAL VALUE to 14.3] [ITEM
+in dividends]
+
+(22.25) a [DIFFERENCE 5%] [ITEM dividend] increase...
+
+Note from these example sentences that the frame includes target words like rise,
+fall, and increase. In fact, the complete frame consists of the following words:
+
+
+
+8 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+Core Roles
+ATTRIBUTE The ATTRIBUTE is a scalar property that the ITEM possesses.
+DIFFERENCE The distance by which an ITEM changes its position on the scale.
+FINAL STATE A description that presents the ITEM’s state after the change in the ATTRIBUTE’s
+
+value as an independent predication.
+FINAL VALUE The position on the scale where the ITEM ends up.
+INITIAL STATE A description that presents the ITEM’s state before the change in the AT-
+
+TRIBUTE’s value as an independent predication.
+INITIAL VALUE The initial position on the scale from which the ITEM moves away.
+ITEM The entity that has a position on the scale.
+VALUE RANGE A portion of the scale, typically identified by its end points, along which the
+
+values of the ATTRIBUTE fluctuate.
+Some Non-Core Roles
+
+DURATION The length of time over which the change takes place.
+SPEED The rate of change of the VALUE.
+GROUP The GROUP in which an ITEM changes the value of an
+
+ATTRIBUTE in a specified way.
+Figure 22.3 The frame elements in the change position on a scale frame from the FrameNet Labelers
+Guide (Ruppenhofer et al., 2006).
+
+VERBS: dwindle move soar escalation shift
+advance edge mushroom swell explosion tumble
+climb explode plummet swing fall
+decline fall reach triple fluctuation ADVERBS:
+decrease fluctuate rise tumble gain increasingly
+diminish gain rocket growth
+dip grow shift NOUNS: hike
+double increase skyrocket decline increase
+drop jump slide decrease rise
+
+FrameNet also codes relationships between frames, allowing frames to inherit
+from each other, or representing relations between frames like causation (and gen-
+eralizations among frame elements in different frames can be representing by inher-
+itance as well). Thus, there is a Cause change of position on a scale frame that is
+linked to the Change of position on a scale frame by the cause relation, but that
+adds an AGENT role and is used for causative examples such as the following:
+
+(22.26) [AGENT They] raised [ITEM the price of their soda] [DIFFERENCE by 2%].
+
+Together, these two frames would allow an understanding system to extract the
+common event semantics of all the verbal and nominal causative and non-causative
+usages.
+
+FrameNets have also been developed for many other languages including Span-
+ish, German, Japanese, Portuguese, Italian, and Chinese.
+
+22.6 Semantic Role Labeling
+
+Semantic role labeling (sometimes shortened as SRL) is the task of automaticallysemantic rolelabeling
+finding the semantic roles of each argument of each predicate in a sentence. Cur-
+rent approaches to semantic role labeling are based on supervised machine learning,
+often using the FrameNet and PropBank resources to specify what counts as a pred-
+icate, define the set of roles used in the task, and provide training and test sets.
+
+
+
+22.6 • SEMANTIC ROLE LABELING 9
+
+Recall that the difference between these two models of semantic roles is that
+FrameNet (22.27) employs many frame-specific frame elements as roles, while Prop-
+Bank (22.28) uses a smaller number of numbered argument labels that can be inter-
+preted as verb-specific labels, along with the more general ARGM labels. Some
+examples:
+
+(22.27)
+[You] can’t [blame] [the program] [for being unable to identify it]
+COGNIZER TARGET EVALUEE REASON
+
+(22.28)
+[The San Francisco Examiner] issued [a special edition] [yesterday]
+ARG0 TARGET ARG1 ARGM-TMP
+
+A simplified semantic role labeling algorithm is sketched in Fig. 22.4. While
+there are a large number of algorithms, many of them use some version of the steps
+in this algorithm.
+
+Most algorithms, beginning with the very earliest semantic role analyzers (Sim-
+mons, 1973), begin by parsing, using broad-coverage parsers to assign a parse to the
+input string. Figure 22.5 shows a parse of (22.28) above. The parse is then traversed
+to find all words that are predicates.
+
+For each of these predicates, the algorithm examines each node in the parse tree
+and decides the semantic role (if any) it plays for this predicate.
+
+This is generally done by supervised classification. Given a labeled training set
+such as PropBank or FrameNet, a feature vector is extracted for each node, using
+feature templates described in the next subsection.
+
+A 1-of-N classifier is then trained to predict a semantic role for each constituent
+given these features, where N is the number of potential semantic roles plus an
+extra NONE role for non-role constituents. Most standard classification algorithms
+have been used (logistic regression, SVM, etc). Finally, for each test sentence to be
+labeled, the classifier is run on each relevant constituent. We give more details of
+the algorithm after we discuss features.
+
+function SEMANTICROLELABEL(words) returns labeled tree
+
+parse?PARSE(words)
+for each predicate in parse do
+
+for each node in parse do
+featurevector?EXTRACTFEATURES(node, predicate, parse)
+CLASSIFYNODE(node, featurevector, parse)
+
+Figure 22.4 A generic semantic-role-labeling algorithm. CLASSIFYNODE is a 1-of-N clas-
+sifier that assigns a semantic role (or NONE for non-role constituents), trained on labeled data
+such as FrameNet or PropBank.
+
+Features for Semantic Role Labeling
+
+A wide variety of features can be used for semantic role labeling. Most systems use
+some generalization of the core set of features introduced by Gildea and Jurafsky
+(2000). A typical set of basic features are based on the following feature templates
+(demonstrated on the NP-SBJ constituent The San Francisco Examiner in Fig. 22.5):
+
+• The governing predicate, in this case the verb issued. The predicate is a cru-
+cial feature since labels are defined only with respect to a particular predicate.
+
+• The phrase type of the constituent, in this case, NP (or NP-SBJ). Some se-
+mantic roles tend to appear as NPs, others as S or PP, and so on.
+
+
+
+10 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+S
+
+NP-SBJ = ARG0 VP
+
+DT NNP NNP NNP
+
+The San Francisco Examiner
+
+VBD = TARGET NP = ARG1 PP-TMP = ARGM-TMP
+
+issued DT JJ NN IN NP
+
+a special edition around NN NP-TMP
+
+noon yesterday
+
+Figure 22.5 Parse tree for a PropBank sentence, showing the PropBank argument labels. The dotted line
+shows the path feature NP?S?VP?VBD for ARG0, the NP-SBJ constituent The San Francisco Examiner.
+
+• The headword of the constituent, Examiner. The headword of a constituent
+can be computed with standard head rules, such as those given in Chapter 11
+in Fig. ??. Certain headwords (e.g., pronouns) place strong constraints on the
+possible semantic roles they are likely to fill.
+
+• The headword part of speech of the constituent, NNP.
+• The path in the parse tree from the constituent to the predicate. This path is
+
+marked by the dotted line in Fig. 22.5. Following Gildea and Jurafsky (2000),
+we can use a simple linear representation of the path, NP?S?VP?VBD. ? and
+? represent upward and downward movement in the tree, respectively. The
+path is very useful as a compact representation of many kinds of grammatical
+function relationships between the constituent and the predicate.
+
+• The voice of the clause in which the constituent appears, in this case, active
+(as contrasted with passive). Passive sentences tend to have strongly different
+linkings of semantic roles to surface form than do active ones.
+
+• The binary linear position of the constituent with respect to the predicate,
+either before or after.
+
+• The subcategorization of the predicate, the set of expected arguments that
+appear in the verb phrase. We can extract this information by using the phrase-
+structure rule that expands the immediate parent of the predicate; VP? VBD
+NP PP for the predicate in Fig. 22.5.
+
+• The named entity type of the constituent.
+• The first words and the last word of the constituent.
+The following feature vector thus represents the first NP in our example (recall
+
+that most observations will have the value NONE rather than, for example, ARG0,
+since most constituents in the parse tree will not bear a semantic role):
+
+ARG0: [issued, NP, Examiner, NNP, NP?S?VP?VBD, active, before, VP ? NP PP,
+ORG, The, Examiner]
+
+Other features are often used in addition, such as sets of n-grams inside the
+constituent, or more complex versions of the path features (the upward or downward
+halves, or whether particular nodes occur in the path).
+
+It’s also possible to use dependency parses instead of constituency parses as the
+basis of features, for example using dependency parse paths instead of constituency
+paths.
+
+
+
+22.7 • SELECTIONAL RESTRICTIONS 11
+
+Further Issues in Semantic Role Labeling
+
+Instead of training a single-stage classifier, some role-labeling algorithms break
+down the classification task for the arguments of a predicate into multiple steps:
+
+1. Pruning: Since only a small number of the constituents in a sentence are
+arguments of any given predicate, many systems use simple heuristics to prune
+unlikely constituents.
+
+2. Identification: a binary classification of each node as an argument to be la-
+beled or a NONE.
+
+3. Classification: a 1-of-N classification of all the constituents that were labeled
+as arguments by the previous stage
+
+The separation of identification and classification may lead to better use of fea-
+tures (different features may be useful for the two tasks) or to computational effi-
+ciency.
+
+The classification algorithm described above classifies each argument separately
+(‘locally’), making the simplifying assumption that each argument of a predicate
+can be labeled independently. But this is of course not true; there are many kinds
+of interactions between arguments that require a more ‘global’ assignment of labels
+to constituents. For example, constituents in FrameNet and PropBank are required
+to be non-overlapping. Thus a system may incorrectly label two overlapping con-
+stituents as arguments. At the very least it needs to decide which of the two is
+correct; better would be to use a global criterion to avoid making this mistake. More
+significantly, the semantic roles of constituents are not independent; since PropBank
+does not allow multiple identical arguments, labeling one constituent as an ARG0
+should greatly increase the probability of another constituent being labeled ARG1.
+
+For this reason, many role labeling systems add a fourth step to deal with global
+consistency across the labels in a sentence. This fourth step can be implemented
+in many ways. The local classifiers can return a list of possible labels associated
+with probabilities for each constituent, and a second-pass re-ranking approach can
+be used to choose the best consensus label. Integer linear programming (ILP) is
+another common way to choose a solution that conforms best to multiple constraints.
+
+The standard evaluation for semantic role labeling is to require that each ar-
+gument label must be assigned to the exactly correct word sequence or parse con-
+stituent, and then compute precision, recall, and F-measure. Identification and clas-
+sification can also be evaluated separately.
+
+Systems for performing automatic semantic role labeling have been applied widely
+to improve the state-of-the-art in tasks across NLP like question answering (Shen
+and Lapata 2007, Surdeanu et al. 2011) and machine translation (Liu and Gildea 2010,
+Lo et al. 2013).
+
+22.7 Selectional Restrictions
+
+We turn in this section to another way to represent facts about the relationship be-
+tween predicates and arguments. A selectional restriction is a semantic type con-selectionalrestriction
+straint that a verb imposes on the kind of concepts that are allowed to fill its argument
+roles. Consider the two meanings associated with the following example:
+
+(22.29) I want to eat someplace nearby.
+
+
+
+12 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+There are two possible parses and semantic interpretations for this sentence. In
+the sensible interpretation, eat is intransitive and the phrase someplace nearby is
+an adjunct that gives the location of the eating event. In the nonsensical speaker-as-
+Godzilla interpretation, eat is transitive and the phrase someplace nearby is the direct
+object and the THEME of the eating, like the NP Malaysian food in the following
+sentences:
+
+(22.30) I want to eat Malaysian food.
+
+How do we know that someplace nearby isn’t the direct object in this sentence?
+One useful cue is the semantic fact that the THEME of EATING events tends to be
+something that is edible. This restriction placed by the verb eat on the filler of its
+THEME argument is a selectional restriction.
+
+Selectional restrictions are associated with senses, not entire lexemes. We can
+see this in the following examples of the lexeme serve:
+
+(22.31) The restaurant serves green-lipped mussels.
+(22.32) Which airlines serve Denver?
+
+Example (22.31) illustrates the offering-food sense of serve, which ordinarily re-
+stricts its THEME to be some kind of food Example (22.32) illustrates the provides a
+commercial service to sense of serve, which constrains its THEME to be some type
+of appropriate location.
+
+Selectional restrictions vary widely in their specificity. The verb imagine, for
+example, imposes strict requirements on its AGENT role (restricting it to humans
+and other animate entities) but places very few semantic requirements on its THEME
+role. A verb like diagonalize, on the other hand, places a very specific constraint
+on the filler of its THEME role: it has to be a matrix, while the arguments of the
+adjectives odorless are restricted to concepts that could possess an odor:
+
+(22.33) In rehearsal, I often ask the musicians to imagine a tennis game.
+(22.34) Radon is an odorless gas that can’t be detected by human senses.
+
+(22.35) To diagonalize a matrix is to find its eigenvalues.
+
+These examples illustrate that the set of concepts we need to represent selectional
+restrictions (being a matrix, being able to possess an odor, etc) is quite open ended.
+This distinguishes selectional restrictions from other features for representing lexical
+knowledge, like parts-of-speech, which are quite limited in number.
+
+22.7.1 Representing Selectional Restrictions
+One way to capture the semantics of selectional restrictions is to use and extend the
+event representation of Chapter 14. Recall that the neo-Davidsonian representation
+of an event consists of a single variable that stands for the event, a predicate denoting
+the kind of event, and variables and relations for the event roles. Ignoring the issue of
+the ? -structures and using thematic roles rather than deep event roles, the semantic
+contribution of a verb like eat might look like the following:
+
+?e,x,y Eating(e)?Agent(e,x)?T heme(e,y)
+
+With this representation, all we know about y, the filler of the THEME role, is that
+it is associated with an Eating event through the Theme relation. To stipulate the
+selectional restriction that y must be something edible, we simply add a new term to
+that effect:
+
+?e,x,y Eating(e)?Agent(e,x)?T heme(e,y)?EdibleT hing(y)
+
+
+
+22.7 • SELECTIONAL RESTRICTIONS 13
+
+Sense 1
+
+hamburger, beefburger --
+
+(a fried cake of minced beef served on a bun)
+
+=> sandwich
+
+=> snack food
+
+=> dish
+
+=> nutriment, nourishment, nutrition...
+
+=> food, nutrient
+
+=> substance
+
+=> matter
+
+=> physical entity
+
+=> entity
+
+Figure 22.6 Evidence from WordNet that hamburgers are edible.
+
+When a phrase like ate a hamburger is encountered, a semantic analyzer can
+form the following kind of representation:
+
+?e,x,y Eating(e)?Eater(e,x)?T heme(e,y)?EdibleT hing(y)?Hamburger(y)
+
+This representation is perfectly reasonable since the membership of y in the category
+Hamburger is consistent with its membership in the category EdibleThing, assuming
+a reasonable set of facts in the knowledge base. Correspondingly, the representation
+for a phrase such as ate a takeoff would be ill-formed because membership in an
+event-like category such as Takeoff would be inconsistent with membership in the
+category EdibleThing.
+
+While this approach adequately captures the semantics of selectional restrictions,
+there are two problems with its direct use. First, using FOL to perform the simple
+task of enforcing selectional restrictions is overkill. Other, far simpler, formalisms
+can do the job with far less computational cost. The second problem is that this
+approach presupposes a large, logical knowledge base of facts about the concepts
+that make up selectional restrictions. Unfortunately, although such common-sense
+knowledge bases are being developed, none currently have the kind of coverage
+necessary to the task.
+
+A more practical approach is to state selectional restrictions in terms of WordNet
+synsets rather than as logical concepts. Each predicate simply specifies a WordNet
+synset as the selectional restriction on each of its arguments. A meaning representa-
+tion is well-formed if the role filler word is a hyponym (subordinate) of this synset.
+
+For our ate a hamburger example, for instance, we could set the selectional
+restriction on the THEME role of the verb eat to the synset {food, nutrient}, glossed
+as any substance that can be metabolized by an animal to give energy and build
+tissue. Luckily, the chain of hypernyms for hamburger shown in Fig. 22.6 reveals
+that hamburgers are indeed food. Again, the filler of a role need not match the
+restriction synset exactly; it just needs to have the synset as one of its superordinates.
+
+We can apply this approach to the THEME roles of the verbs imagine, lift, and di-
+agonalize, discussed earlier. Let us restrict imagine’s THEME to the synset {entity},
+lift’s THEME to {physical entity}, and diagonalize to {matrix}. This arrangement
+correctly permits imagine a hamburger and lift a hamburger, while also correctly
+ruling out diagonalize a hamburger.
+
+
+
+14 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+22.7.2 Selectional Preferences
+In the earliest implementations, selectional restrictions were considered strict con-
+straints on the kind of arguments a predicate could take (Katz and Fodor 1963,
+Hirst 1987). For example, the verb eat might require that its THEME argument
+be [+FOOD]. Early word sense disambiguation systems used this idea to rule out
+senses that violated the selectional restrictions of their governing predicates.
+
+Very quickly, however, it became clear that these selectional restrictions were
+better represented as preferences rather than strict constraints (Wilks 1975b, Wilks 1975a).
+For example, selectional restriction violations (like inedible arguments of eat) often
+occur in well-formed sentences, for example because they are negated (22.36), or
+because selectional restrictions are overstated (22.37):
+
+(22.36) But it fell apart in 1931, perhaps because people realized you can’t eat
+gold for lunch if you’re hungry.
+
+(22.37) In his two championship trials, Mr. Kulkarni ate glass on an empty
+stomach, accompanied only by water and tea.
+
+Modern systems for selectional preferences therefore specify the relation be-
+tween a predicate and its possible arguments with soft constraints of some kind.
+
+Selectional Association
+
+One of the most influential has been the selectional association model of Resnik
+(1993). Resnik defines the idea of selectional preference strength as the general
+
+selectional
+preference
+
+strength
+amount of information that a predicate tells us about the semantic class of its argu-
+ments. For example, the verb eat tells us a lot about the semantic class of its direct
+objects, since they tend to be edible. The verb be, by contrast, tells us less about
+its direct objects. The selectional preference strength can be defined by the differ-
+ence in information between two distributions: the distribution of expected semantic
+classes P(c) (how likely is it that a direct object will fall into class c) and the dis-
+tribution of expected semantic classes for the particular verb P(c|v) (how likely is
+it that the direct object of the specific verb v will fall into semantic class c). The
+greater the difference between these distributions, the more information the verb is
+giving us about possible objects. The difference between these two distributions can
+be quantified by relative entropy, or the Kullback-Leibler divergence (Kullback andrelative entropy
+Leibler, 1951). The Kullback-Leibler or KL divergence D(P||Q) expresses the dif-KL divergence
+ference between two probability distributions P and Q (we’ll return to this when we
+discuss distributional models of meaning in Chapter 17).
+
+D(P||Q) =
+?
+
+x
+
+P(x) log
+P(x)
+Q(x)
+
+(22.38)
+
+The selectional preference SR(v) uses the KL divergence to express how much
+information, in bits, the verb v expresses about the possible semantic class of its
+argument.
+
+SR(v) = D(P(c|v)||P(c))
+
+=
+?
+
+c
+
+P(c|v) log P(c|v)
+P(c)
+
+(22.39)
+
+Resnik then defines the selectional association of a particular class and verbselectionalassociation
+
+
+
+22.7 • SELECTIONAL RESTRICTIONS 15
+
+as the relative contribution of that class to the general selectional preference of the
+verb:
+
+AR(v,c) =
+1
+
+SR(v)
+P(c|v) log P(c|v)
+
+P(c)
+(22.40)
+
+The selectional association is thus a probabilistic measure of the strength of as-
+sociation between a predicate and a class dominating the argument to the predicate.
+Resnik estimates the probabilities for these associations by parsing a corpus, count-
+ing all the times each predicate occurs with each argument word, and assuming
+that each word is a partial observation of all the WordNet concepts containing the
+word. The following table from Resnik (1996) shows some sample high and low
+selectional associations for verbs and some WordNet semantic classes of their direct
+objects.
+
+Direct Object Direct Object
+Verb Semantic Class Assoc Semantic Class Assoc
+read WRITING 6.80 ACTIVITY -.20
+write WRITING 7.26 COMMERCE 0
+see ENTITY 5.79 METHOD -0.01
+
+Selectional Preference via Conditional Probability
+
+An alternative to using selectional association between a verb and the WordNet class
+of its arguments, is to simply use the conditional probability of an argument word
+given a predicate verb. This simple model of selectional preferences can be used to
+directly modeling the strength of association of one verb (predicate) with one noun
+(argument).
+
+The conditional probability model can be computed by parsing a very large cor-
+pus (billions of words), and computing co-occurrence counts: how often a given
+verb occurs with a given noun in a given relation. The conditional probability of an
+argument noun given a verb for a particular relation P(n|v,r) can then be used as a
+selectional preference metric for that pair of words (Brockmann and Lapata, 2003):
+
+P(n|v,r) =
+
+{
+C(n,v,r)
+C(v,r) if C(n,v,r)> 0
+
+0 otherwise
+
+The inverse probability P(v|n,r) was found to have better performance in some
+cases (Brockmann and Lapata, 2003):
+
+P(v|n,r) =
+
+{
+C(n,v,r)
+C(n,r) if C(n,v,r)> 0
+
+0 otherwise
+
+In cases where it’s not possible to get large amounts of parsed data, another
+option, at least for direct objects, is to get the counts from simple part-of-speech
+based approximations. For example pairs can be extracted using the pattern ”V Det
+N”, where V is any form of the verb, Det is the—a—? and N is the singular or plural
+form of the noun (Keller and Lapata, 2003).
+
+An even simpler approach is to use the simple log co-occurrence frequency of
+the predicate with the argument logcount(v,n,r) instead of conditional probability;
+this seems to do better for extracting preferences for syntactic subjects rather than
+objects (Brockmann and Lapata, 2003).
+
+
+
+16 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+Evaluating Selectional Preferences
+
+One way to evaluate models of selectional preferences is to use pseudowords (Galepseudowords
+et al. 1992, Schu?tze 1992). A pseudoword is an artificial word created by concate-
+nating a test word in some context (say banana) with a confounder word (say door)
+to create banana-door). The task of the system is to identify which of the two words
+is the original word. To evaluate a selectional preference model (for example on the
+relationship between a verb and a direct object) we take a test corpus and select all
+verb tokens. For each verb token (say drive) we select the direct object (e.g., car),
+concatenated with a confounder word that is its nearest neighbor, the noun with the
+frequency closest to the original (say house), to make car/house). We then use the
+selectional preference model to choose which of car and house are more preferred
+objects of drive, and compute how often the model chooses the correct original ob-
+ject (e.g., (car) (Chambers and Jurafsky, 2010).
+
+Another evaluation metric is to get human preferences for a test set of verb-
+argument pairs, and have them rate their degree of plausibility. This is usually done
+by using magnitude estimation, a technique from psychophysics, in which subjects
+rate the plausibility of an argument proportional to a modulus item. A selectional
+preference model can then be evaluated by its correlation with the human prefer-
+ences (Keller and Lapata, 2003).
+
+22.8 Primitive Decomposition of Predicates
+
+One way of thinking about the semantic roles we have discussed through the chapter
+is that they help us define the roles that arguments play in a decompositional way,
+based on finite lists of thematic roles (agent, patient, instrument, proto-agent, proto-
+patient, etc.) This idea of decomposing meaning into sets of primitive semantics
+elements or features, called primitive decomposition or componential analysis,componentialanalysis
+has been taken even further, and focused particularly on predicates.
+
+Consider these examples of the verb kill:
+
+(22.41) Jim killed his philodendron.
+
+(22.42) Jim did something to cause his philodendron to become not alive.
+
+There is a truth-conditional (‘propositional semantics’) perspective from which these
+two sentences have the same meaning. Assuming this equivalence, we could repre-
+sent the meaning of kill as:
+
+(22.43) KILL(x,y)? CAUSE(x, BECOME(NOT(ALIVE(y))))
+thus using semantic primitives like do, cause, become not, and alive.
+
+Indeed, one such set of potential semantic primitives has been used to account
+for some of the verbal alternations discussed in Section 22.2 (Lakoff, 1965; Dowty,
+1979). Consider the following examples.
+
+(22.44) John opened the door. ? CAUSE(John(BECOME(OPEN(door))))
+(22.45) The door opened. ? BECOME(OPEN(door))
+(22.46) The door is open. ? OPEN(door)
+
+The decompositional approach asserts that a single state-like predicate associ-
+ated with open underlies all of these examples. The differences among the meanings
+of these examples arises from the combination of this single predicate with the prim-
+itives CAUSE and BECOME.
+
+
+
+22.9 • AMR 17
+
+While this approach to primitive decomposition can explain the similarity be-
+tween states and actions or causative and non-causative predicates, it still relies on
+having a large number of predicates like open. More radical approaches choose to
+break down these predicates as well. One such approach to verbal predicate de-
+composition that played a role in early natural language understanding systems is
+conceptual dependency (CD), a set of ten primitive predicates, shown in Fig. 22.7.conceptualdependency
+
+Primitive Definition
+ATRANS The abstract transfer of possession or control from one entity to
+
+another
+PTRANS The physical transfer of an object from one location to another
+MTRANS The transfer of mental concepts between entities or within an
+
+entity
+MBUILD The creation of new information within an entity
+PROPEL The application of physical force to move an object
+MOVE The integral movement of a body part by an animal
+INGEST The taking in of a substance by an animal
+EXPEL The expulsion of something from an animal
+SPEAK The action of producing a sound
+ATTEND The action of focusing a sense organ
+
+Figure 22.7 A set of conceptual dependency primitives.
+
+Below is an example sentence along with its CD representation. The verb brought
+is translated into the two primitives ATRANS and PTRANS to indicate that the waiter
+both physically conveyed the check to Mary and passed control of it to her. Note
+that CD also associates a fixed set of thematic roles with each primitive to represent
+the various participants in the action.
+
+(22.47) The waiter brought Mary the check.
+
+?x,y Atrans(x)?Actor(x,Waiter)?Ob ject(x,Check)?To(x,Mary)
+?Ptrans(y)?Actor(y,Waiter)?Ob ject(y,Check)?To(y,Mary)
+
+22.9 AMR
+
+To be written
+
+22.10 Summary
+
+• Semantic roles are abstract models of the role an argument plays in the event
+described by the predicate.
+
+• Thematic roles are a model of semantic roles based on a single finite list of
+roles. Other semantic role models include per-verb semantic role lists and
+proto-agent/proto-patient, both of which are implemented in PropBank,
+and per-frame role lists, implemented in FrameNet.
+
+
+
+18 CHAPTER 22 • SEMANTIC ROLE LABELING
+
+• Semantic role labeling is the task of assigning semantic role labels to the con-
+stituents of a sentence. The task is generally treated as a supervised machine
+learning task, with models trained on PropBank or FrameNet. Algorithms
+generally start by parsing a sentence and then automatically tag each parse
+tree node with a semantic role.
+
+• Semantic selectional restrictions allow words (particularly predicates) to post
+constraints on the semantic properties of their argument words. Selectional
+preference models (like selectional association or simple conditional proba-
+bility) allow a weight or probability to be assigned to the association between
+a predicate and an argument word or class.
+
+Bibliographical and Historical Notes
+Although the idea of semantic roles dates back to Panini, they were re-introduced
+into modern linguistics by (Gruber, 1965) and (Fillmore, 1966) and (Fillmore, 1968).
+Fillmore, interestingly, had become interested in argument structure by studying
+Lucien Tesnie?re’s groundbreaking E?le?ments de Syntaxe Structurale (Tesnie?re, 1959)
+in which the term ‘dependency’ was introduced and the foundations were laid for
+dependency grammar. Following Tesnie?re’s terminology, Fillmore first referred to
+argument roles as actants (Fillmore, 1966) but quickly switched to the term case,
+(see Fillmore (2003)) and proposed a universal list of semantic roles or cases (Agent,
+Patient, Instrument, etc.), that could be taken on by the arguments of predicates.
+Verbs would be listed in the lexicon with their ‘case frame’, the list of obligatory (or
+optional) case arguments.
+
+The idea that semantic roles could provide an intermediate level of semantic
+representation that could help map from syntactic parse structures to deeper, more
+fully-specified representations of meaning was quickly adopted in natural language
+processing, and systems for extracting case frames were created for machine trans-
+lation (Wilks, 1973), question-answering (Hendrix et al., 1973), spoken-language
+understanding (Nash-Webber, 1975), and dialogue systems (Bobrow et al., 1977).
+General-purpose semantic role labelers were developed. The earliest ones (Sim-
+mons, 1973) first parsed a sentence by means of an ATN parser. Each verb then had
+a set of rules specifying how the parse should be mapped to semantic roles. These
+rules mainly made reference to grammatical functions (subject, object, complement
+of specific prepositions) but also checked constituent internal features such as the an-
+imacy of head nouns. Later systems assigned roles from pre-built parse trees, again
+by using dictionaries with verb-specific case frames (Levin 1977, Marcus 1980).
+
+By 1977 case representation was widely used and taught in natural language
+processing and artificial intelligence, and was described as a standard component
+of natural language understanding in the first edition of Winston’s (1977) textbook
+Artificial Intelligence.
+
+In the 1980s Fillmore proposed his model of frame semantics, later describing
+the intuition as follows:
+
+“The idea behind frame semantics is that speakers are aware of possi-
+bly quite complex situation types, packages of connected expectations,
+that go by various names—frames, schemas, scenarios, scripts, cultural
+narratives, memes—and the words in our language are understood with
+such frames as their presupposed background.” (Fillmore, 2012, p. 712)
+
+
+
+EXERCISES 19
+
+The word frame seemed to be in the air for a suite of related notions proposed at
+about the same time by Minsky (1974), Hymes (1974), and Goffman (1974), as
+well as related notions with other names like scripts (Schank and Abelson, 1975)
+and schemata (Bobrow and Norman, 1975) (see Tannen (1979) for a comparison).
+Fillmore was also influenced by the semantic field theorists and by a visit to the Yale
+AI lab where he took notice of the lists of slots and fillers used by early information
+extraction systems like DeJong (1982) and Schank and Abelson (1977). In the 1990s
+Fillmore drew on these insights to begin the FrameNet corpus annotation project.
+
+At the same time, Beth Levin drew on her early case frame dictionaries (Levin,
+1977) to develop her book which summarized sets of verb classes defined by shared
+argument realizations (Levin, 1993). The VerbNet project built on this work (Kipper
+et al., 2000), leading soon afterwards to the PropBank semantic-role-labeled corpus
+created by Martha Palmer and colleagues (Palmer et al., 2005). The combination of
+rich linguistic annotation and corpus-based approach instantiated in FrameNet and
+PropBank led to a revival of automatic approaches to semantic role labeling, first
+on FrameNet (Gildea and Jurafsky, 2000) and then on PropBank data (Gildea and
+Palmer, 2002, inter alia). The problem first addressed in the 1970s by hand-written
+rules was thus now generally recast as one of supervised machine learning enabled
+by large and consistent databases. Many popular features used for role labeling
+are defined in Gildea and Jurafsky (2002), Surdeanu et al. (2003), Xue and Palmer
+(2004), Pradhan et al. (2005), Che et al. (2009), and Zhao et al. (2009).
+
+The use of dependency rather than constituency parses was introduced in the
+CoNLL-2008 shared task (Surdeanu et al., 2008). For surveys see Palmer et al.
+(2010) and Ma?rquez et al. (2008).
+
+To avoid the need for huge labeled training sets, unsupervised approaches for se-
+mantic role labeling attempt to induce the set of semantic roles by generalizing over
+syntactic features of arguments (Swier and Stevenson 2004, Grenager and Man-
+ning 2006, Titov and Klementiev 2012, Lang and Lapata 2014).
+
+The most recent work in semantic role labeling focuses on the use of deep neural
+networks (Collobert et al. 2011, Foland Jr and Martin 2015).
+
+Selectional preference has been widely studied beyond the selectional associa-
+tion models of Resnik (1993) and Resnik (1996). Methods have included cluster-
+ing (Rooth et al., 1999), discriminative learning (Bergsma et al., 2008), and topic
+models (Se?aghdha 2010, Ritter et al. 2010), and constraints can be expressed at the
+level of words or classes (Agirre and Martinez, 2001). Selectional preferences have
+also been successfully integrated into semantic role labeling (Erk 2007, Zapirain
+et al. 2013).
+
+Exercises
+
+
+
+20 Chapter 22 • Semantic Role Labeling
+
+Agirre, E. and Martinez, D. (2001). Learning class-to-class
+selectional preferences. In CoNLL-01.
+
+Baker, C. F., Fillmore, C. J., and Lowe, J. B. (1998). The
+Berkeley FrameNet project. In COLING/ACL-98, Mon-
+treal, Canada, pp. 86–90.
+
+Bergsma, S., Lin, D., and Goebel, R. (2008). Discriminative
+learning of selectional preference from unlabeled text. In
+EMNLP-08, pp. 59–68.
+
+Bobrow, D. G., Kaplan, R. M., Kay, M., Norman, D. A.,
+Thompson, H., and Winograd, T. (1977). GUS, A frame
+driven dialog system. Artificial Intelligence, 8, 155–173.
+
+Bobrow, D. G. and Norman, D. A. (1975). Some princi-
+ples of memory schemata. In Bobrow, D. G. and Collins,
+A. (Eds.), Representation and Understanding. Academic
+Press.
+
+Brockmann, C. and Lapata, M. (2003). Evaluating and com-
+bining approaches to selectional preference acquisition. In
+EACL-03, pp. 27–34.
+
+Chambers, N. and Jurafsky, D. (2010). Improving the use
+of pseudo-words for evaluating selectional preferences. In
+ACL 2010, pp. 445–453.
+
+Che, W., Li, Z., Li, Y., Guo, Y., Qin, B., and Liu, T.
+(2009). Multilingual dependency-based syntactic and se-
+mantic parsing. In CoNLL-09, pp. 49–54.
+
+Collobert, R., Weston, J., Bottou, L., Karlen, M.,
+Kavukcuoglu, K., and Kuksa, P. (2011). Natural language
+processing (almost) from scratch. The Journal of Machine
+Learning Research, 12, 2493–2537.
+
+DeJong, G. F. (1982). An overview of the FRUMP system.
+In Lehnert, W. G. and Ringle, M. H. (Eds.), Strategies for
+Natural Language Processing, pp. 149–176. Lawrence Erl-
+baum.
+
+Dowty, D. R. (1979). Word Meaning and Montague Gram-
+mar. D. Reidel.
+
+Erk, K. (2007). A simple, similarity-based model for selec-
+tional preferences. In ACL-07, pp. 216–223.
+
+Fillmore, C. J. (1966). A proposal concerning english prepo-
+sitions. In Dinneen, F. P. (Ed.), 17th annual Round Table.,
+Vol. 17 of Monograph Series on Language and Linguistics,
+pp. 19–34. Georgetown University Press, Washington D.C.
+
+Fillmore, C. J. (1968). The case for case. In Bach, E. W. and
+Harms, R. T. (Eds.), Universals in Linguistic Theory, pp.
+1–88. Holt, Rinehart & Winston.
+
+Fillmore, C. J. (1985). Frames and the semantics of under-
+standing. Quaderni di Semantica, VI(2), 222–254.
+
+Fillmore, C. J. (2003). Valency and semantic roles: the con-
+cept of deep structure case. In A?gel, V., Eichinger, L. M.,
+Eroms, H. W., Hellwig, P., Heringer, H. J., and Lobin, H.
+(Eds.), Dependenz und Valenz: Ein internationales Hand-
+buch der zeitgeno?ssischen Forschung, chap. 36, pp. 457–
+475. Walter de Gruyter.
+
+Fillmore, C. J. (2012). Encounters with language. Computa-
+tional Linguistics, 38(4), 701–718.
+
+Fillmore, C. J. and Baker, C. F. (2009). A frames approach
+to semantic analysis. In Heine, B. and Narrog, H. (Eds.),
+The Oxford Handbook of Linguistic Analysis, pp. 313–340.
+Oxford University Press.
+
+Fillmore, C. J., Johnson, C. R., and Petruck, M. R. L. (2003).
+Background to FrameNet. International journal of lexicog-
+raphy, 16(3), 235–250.
+
+Foland Jr, W. R. and Martin, J. H. (2015). Dependency-
+based semantic role labeling using convolutional neural
+networks. In *SEM 2015), pp. 279–289.
+
+Gale, W. A., Church, K. W., and Yarowsky, D. (1992). Work
+on statistical methods for word sense disambiguation. In
+Goldman, R. (Ed.), Proceedings of the 1992 AAAI Fall
+Symposium on Probabilistic Approaches to Natural Lan-
+guage.
+
+Gildea, D. and Jurafsky, D. (2000). Automatic labeling of
+semantic roles. In ACL-00, Hong Kong, pp. 512–520.
+
+Gildea, D. and Jurafsky, D. (2002). Automatic labeling of se-
+mantic roles. Computational Linguistics, 28(3), 245–288.
+
+Gildea, D. and Palmer, M. (2002). The necessity of syntac-
+tic parsing for predicate argument recognition. In ACL-02,
+Philadelphia, PA.
+
+Goffman, E. (1974). Frame analysis: An essay on the orga-
+nization of experience. Harvard University Press.
+
+Grenager, T. and Manning, C. D. (2006). Unsupervised Dis-
+covery of a Statistical Verb Lexicon. In EMNLP 2006.
+
+Gruber, J. S. (1965). Studies in Lexical Relations. Ph.D.
+thesis, MIT.
+
+Hendrix, G. G., Thompson, C. W., and Slocum, J. (1973).
+Language processing via canonical verbs and semantic
+models. In Proceedings of IJCAI-73.
+
+Hirst, G. (1987). Semantic Interpretation and the Resolution
+of Ambiguity. Cambridge University Press.
+
+Hymes, D. (1974). Ways of speaking. In Bauman, R.
+and Sherzer, J. (Eds.), Explorations in the ethnography of
+speaking, pp. 433–451. Cambridge University Press.
+
+Johnson-Laird, P. N. (1983). Mental Models. Harvard Uni-
+versity Press, Cambridge, MA.
+
+Katz, J. J. and Fodor, J. A. (1963). The structure of a seman-
+tic theory. Language, 39, 170–210.
+
+Keller, F. and Lapata, M. (2003). Using the web to obtain fre-
+quencies for unseen bigrams. Computational Linguistics,
+29, 459–484.
+
+Kipper, K., Dang, H. T., and Palmer, M. (2000). Class-based
+construction of a verb lexicon. In AAAI-00, Austin, TX, pp.
+691–696.
+
+Kullback, S. and Leibler, R. A. (1951). On information and
+sufficiency. Annals of Mathematical Statistics, 22, 79–86.
+
+Lakoff, G. (1965). On the Nature of Syntactic Irregularity.
+Ph.D. thesis, Indiana University. Published as Irregularity
+in Syntax. Holt, Rinehart, and Winston, New York, 1970.
+
+Lang, J. and Lapata, M. (2014). Similarity-driven semantic
+role induction via graph partitioning. Computational Lin-
+guistics, 40(3), 633–669.
+
+Levin, B. (1977). Mapping sentences to case frames. Tech.
+rep. 167, MIT AI Laboratory. AI Working Paper 143.
+
+Levin, B. (1993). English Verb Classes and Alternations: A
+Preliminary Investigation. University of Chicago Press.
+
+Levin, B. and Rappaport Hovav, M. (2005). Argument Real-
+ization. Cambridge University Press.
+
+Liu, D. and Gildea, D. (2010). Semantic role features for
+machine translation. In Proceedings of COLING 2010, pp.
+716–724.
+
+
+
+Exercises 21
+
+Lo, C.-k., Addanki, K., Saers, M., and Wu, D. (2013). Im-
+proving machine translation by training against an auto-
+matic semantic frame based evaluation metric. In Proceed-
+ings of ACL 2013.
+
+Marcus, M. P. (1980). A Theory of Syntactic Recognition for
+Natural Language. MIT Press.
+
+Ma?rquez, L., Carreras, X., Litkowski, K. C., and Stevenson,
+S. (2008). Semantic role labeling: An introduction to the
+special issue. Computational linguistics, 34(2), 145–159.
+
+Meyers, A., Reeves, R., Macleod, C., Szekely, R., Zielin-
+ska, V., Young, B., and Grishman, R. (2004). The nom-
+bank project: An interim report. In Proceedings of the
+NAACL/HLT Workshop: Frontiers in Corpus Annotation.
+
+Minsky, M. (1974). A framework for representing knowl-
+edge. Tech. rep. 306, MIT AI Laboratory. Memo 306.
+
+Nash-Webber, B. L. (1975). The role of semantics in auto-
+matic speech understanding. In Bobrow, D. G. and Collins,
+A. (Eds.), Representation and Understanding, pp. 351–
+382. Academic Press.
+
+Palmer, M., Gildea, D., and Xue, N. (2010). Semantic role
+labeling. Synthesis Lectures on Human Language Tech-
+nologies, 3(1), 1–103.
+
+Palmer, M., Kingsbury, P., and Gildea, D. (2005). The propo-
+sition bank: An annotated corpus of semantic roles. Com-
+putational Linguistics, 31(1), 71–106.
+
+Pradhan, S., Ward, W., Hacioglu, K., Martin, J. H., and Ju-
+rafsky, D. (2005). Semantic role labeling using different
+syntactic views. In ACL-05, Ann Arbor, MI.
+
+Resnik, P. (1993). Semantic classes and syntactic ambigu-
+ity. In Proceedings of the workshop on Human Language
+Technology, pp. 278–283.
+
+Resnik, P. (1996). Selectional constraints: An information-
+theoretic model and its computational realization. Cogni-
+tion, 61, 127–159.
+
+Ritter, A., Etzioni, O., and Mausam (2010). A latent dirich-
+let allocation method for selectional preferences. In ACL
+2010, pp. 424–434.
+
+Rooth, M., Riezler, S., Prescher, D., Carroll, G., and Beil,
+F. (1999). Inducing a semantically annotated lexicon via
+EM-based clustering. In ACL-99, College Park, MA, pp.
+104–111.
+
+Ruppenhofer, J., Ellsworth, M., Petruck, M. R. L., John-
+son, C. R., and Scheffczyk, J. (2006). FrameNet II: Ex-
+tended theory and practice. Version 1.3, http://www.
+icsi.berkeley.edu/framenet/.
+
+Schank, R. C. and Abelson, R. P. (1975). Scripts, plans, and
+knowledge. In Proceedings of IJCAI-75, pp. 151–157.
+
+Schank, R. C. and Abelson, R. P. (1977). Scripts, Plans,
+Goals and Understanding. Lawrence Erlbaum.
+
+Schu?tze, H. (1992). Context space. In Goldman, R. (Ed.),
+Proceedings of the 1992 AAAI Fall Symposium on Proba-
+bilistic Approaches to Natural Language.
+
+Se?aghdha, D. O. (2010). Latent variable models of selec-
+tional preference. In ACL 2010, pp. 435–444.
+
+Shen, D. and Lapata, M. (2007). Using semantic roles to im-
+prove question answering.. In EMNLP-CoNLL, pp. 12–21.
+
+Simmons, R. F. (1973). Semantic networks: Their com-
+putation and use for understanding English sentences. In
+Schank, R. C. and Colby, K. M. (Eds.), Computer Models
+of Thought and Language, pp. 61–113. W.H. Freeman and
+Co.
+
+Surdeanu, M., Ciaramita, M., and Zaragoza, H. (2011).
+Learning to rank answers to non-factoid questions from
+web collections. Computational Linguistics, 37(2), 351–
+383.
+
+Surdeanu, M., Harabagiu, S., Williams, J., and Aarseth, P.
+(2003). Using predicate-argument structures for informa-
+tion extraction. In ACL-03, pp. 8–15.
+
+Surdeanu, M., Johansson, R., Meyers, A., Ma?rquez, L., and
+Nivre, J. (2008). The conll-2008 shared task on joint pars-
+ing of syntactic and semantic dependencies. In CoNLL-08,
+pp. 159–177.
+
+Swier, R. and Stevenson, S. (2004). Unsupervised semantic
+role labelling. In EMNLP 2004, pp. 95–102.
+
+Tannen, D. (1979). What’s in a frame? Surface evidence for
+underlying expectations. In Freedle, R. (Ed.), New Direc-
+tions in Discourse Processing, pp. 137–181. Ablex.
+
+Tesnie?re, L. (1959). E?le?ments de Syntaxe Structurale. Li-
+brairie C. Klincksieck, Paris.
+
+Titov, I. and Klementiev, A. (2012). A Bayesian approach
+to unsupervised semantic role induction. In EACL-12, pp.
+12–22.
+
+Wilks, Y. (1973). An artificial intelligence approach to ma-
+chine translation. In Schank, R. C. and Colby, K. M. (Eds.),
+Computer Models of Thought and Language, pp. 114–151.
+W.H. Freeman.
+
+Wilks, Y. (1975a). Preference semantics. In Keenan, E. L.
+(Ed.), The Formal Semantics of Natural Language, pp.
+329–350. Cambridge Univ. Press.
+
+Wilks, Y. (1975b). A preferential, pattern-seeking, semantics
+for natural language inference. Artificial Intelligence, 6(1),
+53–74.
+
+Winston, P. H. (1977). Artificial Intelligence. Addison Wes-
+ley.
+
+Xue, N. and Palmer, M. (2004). Calibrating features for se-
+mantic role labeling. In EMNLP 2004.
+
+Zapirain, B., Agirre, E., Ma?rquez, L., and Surdeanu, M.
+(2013). Selectional preferences for semantic role classi-
+fication. Computational Linguistics, 39(3), 631–663.
+
+Zhao, H., Chen, W., Kit, C., and Zhou, G. (2009). Mul-
+tilingual dependency learning: A huge feature engineering
+method to semantic dependency parsing. In CoNLL-09, pp.
+55–60.
+
+http://www.icsi.berkeley.edu/framenet/
+http://www.icsi.berkeley.edu/framenet/
+
+	Semantic Role Labeling
+	Semantic Roles
+	Diathesis Alternations
+	Semantic Roles: Problems with Thematic Roles
+	The Proposition Bank
+	FrameNet
+	Semantic Role Labeling
+	Selectional Restrictions
+	Representing Selectional Restrictions
+	Selectional Preferences
+
+	Primitive Decomposition of Predicates
+	AMR
+	Summary
+	Bibliographical and Historical Notes
+	Exercises
+
+

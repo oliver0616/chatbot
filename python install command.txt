@@ -1,0 +1,47 @@
+python install command
+
+/Users/cetadmin/anaconda3/bin/python3 -m pip install --user <lib>
+
+python 3 run command
+
+/Users/cetadmin/anaconda3/bin/python3
+
+make python3 command work
+
+alias python3=/Users/cetadmin/anaconda3/bin/python3.6
+
+
+USING SERVER
+
+ssh -N -L 8006:localhost:8006 cs-student@dgx.cs.ecu.edu
+
+docker run -d -p 8006:8006 -v /home/cs-student:/home/jovyan/work 6c0d98363eab start.sh jupyter lab --port=8006
+
+docker run -p 8006:8006 -v /home/cs-student:/home/jovyan/work 6c0d98363eab start.sh jupyter lab --port=8006
+
+to open bash in docker
+docker exec -it 8c75a477fceb bash 
+		<container name>
+
+
+then, so it knows where to look 
+apt-get update
+
+shows all containers
+docker container ls
+
+to pause docker
+docker pause <container>
+
+docker exec -it 911 jupyter notebook list
+
+
+
+docker run -p 8007:8007 -v /home/cs-student:/home/jovyan/work 6c0d98363eab start.sh jupyter lab --port=8007
+
+docker run -d --shm-size=1024m -v /home/cs-student:/home/jovyan/work 6c0d98363eab
+
+
+
+scp -r /Users/edwardsja15/Desktop/Reuters/rcv1-parsed-not-lower/all-not-lower/ cs-student@dgx.cs.ecu.edu:/home/jovyan/work/Jack/rcv1-parsed/
+

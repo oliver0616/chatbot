@@ -1,0 +1,263 @@
+Last login: Mon Nov 12 14:45:29 on ttys000
+D25FN1YNDHJW:~ chenh15$ cd desktop
+D25FN1YNDHJW:desktop chenh15$ git clone https://github.com/Whitetigerswt/csci-website.git
+fatal: destination path 'csci-website' already exists and is not an empty directory.
+D25FN1YNDHJW:desktop chenh15$ git clone https://github.com/Whitetigerswt/csci-website.git
+Cloning into 'csci-website'...
+Username for 'https://github.com': oliver0616
+Password for 'https://oliver0616@github.com': 
+remote: Enumerating objects: 286, done.
+remote: Counting objects: 100% (286/286), done.
+remote: Compressing objects: 100% (190/190), done.
+remote: Total 30571 (delta 171), reused 196 (delta 94), pack-reused 30285
+Receiving objects: 100% (30571/30571), 160.33 MiB | 44.08 MiB/s, done.
+Resolving deltas: 100% (9363/9363), done.
+Checking out files: 100% (975/975), done.
+D25FN1YNDHJW:desktop chenh15$ cd csci-website
+D25FN1YNDHJW:csci-website chenh15$ chmod +x build_web.bat build_db.bat run_web.bat run_db.bat
+chmod: build_web.bat: No such file or directory
+chmod: run_web.bat: No such file or directory
+D25FN1YNDHJW:csci-website chenh15$ chmod +x build_web.sh build_db.bat run_web.sh run_db.bat
+D25FN1YNDHJW:csci-website chenh15$ ./build_db.bat
+Sending build context to Docker daemon  265.8MB
+Step 1/7 : FROM postgres
+latest: Pulling from library/postgres
+f17d81b4b692: Pull complete 
+c1f213be5edb: Pull complete 
+9c79723dc510: Pull complete 
+603a66804109: Pull complete 
+b4f1b901e523: Pull complete 
+99d9650419de: Pull complete 
+02d87bb25bad: Pull complete 
+333a24caa91e: Pull complete 
+3c7e740c127f: Pull complete 
+5d55070c373e: Pull complete 
+ac0831b17f07: Pull complete 
+a917aee9e309: Pull complete 
+5b34f1eb023b: Pull complete 
+d22f9971e744: Pull complete 
+Digest: sha256:e6708d2202efbeada699821bafb710365d6d13d61ab5d838a015d3acd08d6f7e
+Status: Downloaded newer image for postgres:latest
+ ---> 39dfbcb5424b
+Step 2/7 : USER postgres
+ ---> Running in d563a6489e41
+Removing intermediate container d563a6489e41
+ ---> fe1595bac6d6
+Step 3/7 : WORKDIR /
+Removing intermediate container cd0a7d76a03f
+ ---> 061c2f3d39b1
+Step 4/7 : COPY database.sql /main/db.sql
+ ---> 933d27e07d86
+Step 5/7 : WORKDIR /main
+Removing intermediate container 97bc41e82e3e
+ ---> 46d7e52c6b93
+Step 6/7 : RUN chmod 777 /var/lib/postgresql/data
+ ---> Running in 554b26581c16
+Removing intermediate container 554b26581c16
+ ---> 79eb20b3cb96
+Step 7/7 : RUN psql -h localhost -d web -U postgres -f /main/db.sql
+ ---> Running in b13d6f75e3e5
+psql: could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 5432?
+could not connect to server: Cannot assign requested address
+	Is the server running on host "localhost" (::1) and accepting
+	TCP/IP connections on port 5432?
+The command '/bin/sh -c psql -h localhost -d web -U postgres -f /main/db.sql' returned a non-zero code: 2
+Error response from daemon: No such container: db
+Error response from daemon: No such container: pg_test
+Error: No such container: pg_test
+Unable to find image 'csci-web:db' locally
+docker: Error response from daemon: pull access denied for csci-web, repository does not exist or may require 'docker login'.
+See 'docker run --help'.
+D25FN1YNDHJW:csci-website chenh15$ ./build_db.bat
+Sending build context to Docker daemon  265.8MB
+Step 1/7 : FROM postgres
+ ---> 39dfbcb5424b
+Step 2/7 : USER postgres
+ ---> Using cache
+ ---> fe1595bac6d6
+Step 3/7 : WORKDIR /
+ ---> Using cache
+ ---> 061c2f3d39b1
+Step 4/7 : COPY database.sql /main/db.sql
+ ---> Using cache
+ ---> 933d27e07d86
+Step 5/7 : WORKDIR /main
+ ---> Using cache
+ ---> 46d7e52c6b93
+Step 6/7 : RUN chmod 777 /var/lib/postgresql/data
+ ---> Using cache
+ ---> 79eb20b3cb96
+Step 7/7 : RUN psql -h localhost -d web -U postgres -f /main/db.sql
+ ---> Running in 611110282ce5
+psql: could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 5432?
+could not connect to server: Cannot assign requested address
+	Is the server running on host "localhost" (::1) and accepting
+	TCP/IP connections on port 5432?
+The command '/bin/sh -c psql -h localhost -d web -U postgres -f /main/db.sql' returned a non-zero code: 2
+Error response from daemon: No such container: db
+Error response from daemon: No such container: pg_test
+Error: No such container: pg_test
+Unable to find image 'csci-web:db' locally
+docker: Error response from daemon: pull access denied for csci-web, repository does not exist or may require 'docker login'.
+See 'docker run --help'.
+D25FN1YNDHJW:csci-website chenh15$ npm
+-bash: npm: command not found
+D25FN1YNDHJW:csci-website chenh15$ ./build_web.sh 
+Sending build context to Docker daemon  265.8MB
+Step 1/8 : FROM node
+ ---> a2b9536415c2
+Step 2/8 : USER root
+ ---> Using cache
+ ---> 821d3743c8f2
+Step 3/8 : WORKDIR /
+ ---> Using cache
+ ---> 3df3f3f58a54
+Step 4/8 : LABEL maintainer="Seaver Thorn <thorns14@students.ecu.edu>"     description="Base image for the CSCI learning website"
+ ---> Using cache
+ ---> 83ddcbb33d1e
+Step 5/8 : RUN mkdir -p /root/.ssh
+ ---> Running in 06d7e6147c23
+Removing intermediate container 06d7e6147c23
+ ---> 5476132fae58
+Step 6/8 : COPY README.md .ssh*/* /root/.ssh/
+ ---> f238b184bd83
+Step 7/8 : RUN mkdir /main
+ ---> Running in 14672e7c0588
+Removing intermediate container 14672e7c0588
+ ---> 1c402ca57c69
+Step 8/8 : WORKDIR /main
+Removing intermediate container c6eba0ec8dc3
+ ---> dd85b9c9b8ff
+Successfully built dd85b9c9b8ff
+Successfully tagged csci-web:latest
+Error response from daemon: No such container: csci-web
+root@36917d7a2b10:/main# cd    
+.git/                  chatbot/               out/
+.gitignore             client/                package.json
+.jshintrc              css.md                 public/
+Dockerfile             database backups/      run_db.bat
+LICENSE                database.sql           run_web.sh
+PostGres_Dockerfile    database_structure.md  sessions/
+README.md              file_structure.md      src/
+build_db.bat           html_and_ejs.md        test/
+build_web.sh           js.md                  views/
+root@36917d7a2b10:/main# exit
+exit
+D25FN1YNDHJW:csci-website chenh15$ git checkout website-to-react
+Checking out files: 100% (856/856), done.
+M	build_db.bat
+M	run_db.bat
+Branch 'website-to-react' set up to track remote branch 'website-to-react' from 'origin'.
+Switched to a new branch 'website-to-react'
+D25FN1YNDHJW:csci-website chenh15$ ./build_
+-bash: ./build_: No such file or directory
+D25FN1YNDHJW:csci-website chenh15$ ./build_web.sh 
+Sending build context to Docker daemon  280.4MB
+Step 1/8 : FROM node
+ ---> a2b9536415c2
+Step 2/8 : USER root
+ ---> Using cache
+ ---> 821d3743c8f2
+Step 3/8 : WORKDIR /
+ ---> Using cache
+ ---> 3df3f3f58a54
+Step 4/8 : LABEL maintainer="Seaver Thorn <thorns14@students.ecu.edu>"     description="Base image for the CSCI learning website"
+ ---> Using cache
+ ---> 83ddcbb33d1e
+Step 5/8 : RUN mkdir -p /root/.ssh
+ ---> Using cache
+ ---> 5476132fae58
+Step 6/8 : COPY README.md .ssh*/* /root/.ssh/
+ ---> Using cache
+ ---> f238b184bd83
+Step 7/8 : RUN mkdir /main
+ ---> Using cache
+ ---> 1c402ca57c69
+Step 8/8 : WORKDIR /main
+ ---> Using cache
+ ---> dd85b9c9b8ff
+Successfully built dd85b9c9b8ff
+Successfully tagged csci-web:latest
+Error response from daemon: No such container: csci-web
+root@1f1e7e58bce8:/main# cd react-csci-website/
+root@1f1e7e58bce8:/main/react-csci-website# npm install 
+npm WARN deprecated circular-json@0.3.3: CircularJSON is in maintenance only, flatted is its successor.
+
+> jss@9.8.7 postinstall /main/react-csci-website/node_modules/jss
+> node -e "console.log('\u001b[35m\u001b[1mLove JSS? You can now support us on open collective:\u001b[22m\u001b[39m\n > \u001b[34mhttps://opencollective.com/jss/donate\u001b[0m')"
+
+Love JSS? You can now support us on open collective:
+ > https://opencollective.com/jss/donate
+npm notice created a lockfile as package-lock.json. You should commit this file.
+npm WARN optional SKIPPING OPTIONAL DEPENDENCY: fsevents@1.2.4 (node_modules/fsevents):
+npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for fsevents@1.2.4: wanted {"os":"darwin","arch":"any"} (current: {"os":"linux","arch":"x64"})
+
+added 1771 packages from 805 contributors and audited 32876 packages in 145.535s
+found 0 vulnerabilities
+
+root@1f1e7e58bce8:/main/react-csci-website# cd ..
+root@1f1e7e58bce8:/main# npm install
+
+> phantomjs-prebuilt@2.1.16 install /main/node_modules/phantomjs-prebuilt
+> node install.js
+
+PhantomJS not found on PATH
+Downloading https://github.com/Medium/phantomjs/releases/download/v2.1.1/phantomjs-2.1.1-linux-x86_64.tar.bz2
+Saving to /tmp/phantomjs/phantomjs-2.1.1-linux-x86_64.tar.bz2
+Receiving...
+  [----------------------------------------] 0%
+Received 22866K total.
+Extracting tar contents (via spawned process)
+Removing /main/node_modules/phantomjs-prebuilt/lib/phantom
+Copying extracted folder /tmp/phantomjs/phantomjs-2.1.1-linux-x86_64.tar.bz2-extract-1542056099079/phantomjs-2.1.1-linux-x86_64 -> /main/node_modules/phantomjs-prebuilt/lib/phantom
+Writing location.js file
+Done. Phantomjs binary available at /main/node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs
+npm notice created a lockfile as package-lock.json. You should commit this file.
+npm WARN slick-carousel@1.8.1 requires a peer of jquery@>=1.8.0 but none is installed. You must install peer dependencies yourself.
+
+added 391 packages from 880 contributors and audited 1134 packages in 44.711s
+found 0 vulnerabilities
+
+root@1f1e7e58bce8:/main# ls
+Dockerfile  PostGres_Dockerfile  build_db.bat  chatbot	database backups  database_structure.md  html_and_ejs.md  node_modules	package-lock.json  public	       run_db.bat  sessions  test
+LICENSE     README.md		 build_web.sh  css.md	database.sql	  file_structure.md	 js.md		  out		package.json	   react-csci-website  run_web.sh  src	     views
+root@1f1e7e58bce8:/main# npm start
+
+> csci-website@1.0.0 start /main
+> concurrently --kill-others-on-fail "npm run-script startdev" " cd react-csci-website && yarn start"
+
+[0] 
+[0] > csci-website@1.0.0 startdev /main
+[0] > PORT=8080 supervisor ./src/app.js
+[0] 
+[0] 
+[0] Running node-supervisor with
+[0]   program './src/app.js'
+[0]   --watch '.'
+[0]   --extensions 'node,js'
+[0]   --exec 'node'
+[0] 
+[0] Starting child process with 'node ./src/app.js'
+[0] Watching directory '/main' for changes.
+[0] Press rs for restarting the process.
+yarn run v1.10.1
+[0] Error reading path: /main/node_modules/catharsis
+$ PORT=80 react-scripts start
+[0] listening on port 8080
+[1] Starting the development server...
+[1] 
+[1] Compiled successfully!
+[1] 
+[1] You can now view react-csci-website in the browser.
+[1] 
+[1]   Local:            http://localhost:80/
+[1]   On Your Network:  http://172.17.0.2:80/
+[1] 
+[1] Note that the development build is not optimized.
+[1] To create a production build, use yarn build.
+[1] 
+

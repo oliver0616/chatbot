@@ -1,0 +1,1249 @@
+
+Speech and Language Processing. Daniel Jurafsky & James H. Martin. Copyright c© 2017. All
+rights reserved. Draft of August 28, 2017.
+
+CHAPTER
+
+12 Syntactic Parsing
+We introduced parsing in Chapter 3 as a combination of recognizing an input string
+and assigning a structure to it. Syntactic parsing, then, is the task of recognizing a
+sentence and assigning a syntactic structure to it. This chapter focuses on the kind of
+structures assigned by context-free grammars of the kind described in Chapter 11.
+Since they are based on a purely declarative formalism, context-free grammars don’t
+specify how the parse tree for a given sentence should be computed. We therefore
+need to specify algorithms that employ these grammars to efficiently produce correct
+trees.
+
+Parse trees are directly useful in applications such as grammar checking in
+word-processing systems: a sentence that cannot be parsed may have grammatical
+errors (or at least be hard to read). More typically, however, parse trees serve as an
+important intermediate stage of representation for semantic analysis (as we show in
+Chapter 20) and thus play an important role in applications like question answering
+and information extraction. For example, to answer the question
+
+What books were written by British women authors before 1800?
+
+we’ll need to know that the subject of the sentence was what books and that the by-
+adjunct was British women authors to help us figure out that the user wants a list of
+books (and not a list of authors).
+
+Before presenting any algorithms, we begin by discussing how the ambiguity
+arises again in this context and the problems it presents. The section that fol-
+lows then presents the Cocke-Kasami-Younger (CKY) algorithm (Kasami 1965,
+Younger 1967), the standard dynamic programming approach to syntactic parsing.
+Recall that we’ve already seen several applications of dynamic programming algo-
+rithms in earlier chapters — Minimum-Edit-Distance, Viterbi, and Forward. Finally,
+we discuss partial parsing methods, for use in situations in which a superficial syn-
+tactic analysis of an input may be sufficient.
+
+12.1 Ambiguity
+
+One morning I shot an elephant in my pajamas.
+How he got into my pajamas I don’t know.
+
+Groucho Marx, Animal Crackers, 1930
+
+Ambiguity is perhaps the most serious problem faced by syntactic parsers. Chap-
+ter 10 introduced the notions of part-of-speech ambiguity and part-of-speech dis-
+ambiguation. Here, we introduce a new kind of ambiguity, called structural ambi-
+guity, which arises from many commonly used rules in phrase-structure grammars.Structuralambiguity
+To illustrate the issues associated with structural ambiguity, we’ll make use of a new
+toy grammar L1, shown in Figure 12.1, which consists of the L0 grammar from the
+last chapter augmented with a few additional rules.
+
+
+
+2 CHAPTER 12 • SYNTACTIC PARSING
+
+Grammar Lexicon
+S ? NP VP Det ? that | this | the | a
+S ? Aux NP VP Noun ? book | flight | meal | money
+S ? VP Verb ? book | include | prefer
+NP ? Pronoun Pronoun ? I | she | me
+NP ? Proper-Noun Proper-Noun ? Houston | NWA
+NP ? Det Nominal Aux ? does
+Nominal ? Noun Preposition ? from | to | on | near | through
+Nominal ? Nominal Noun
+Nominal ? Nominal PP
+VP ? Verb
+VP ? Verb NP
+VP ? Verb NP PP
+VP ? Verb PP
+VP ? VP PP
+PP ? Preposition NP
+Figure 12.1 The L1 miniature English grammar and lexicon.
+
+Structural ambiguity occurs when the grammar can assign more than one parse
+to a sentence. Groucho Marx’s well-known line as Captain Spaulding in Animal
+Crackers is ambiguous because the phrase in my pajamas can be part of the NP
+headed by elephant or a part of the verb phrase headed by shot. Figure 12.2 illus-
+trates these two analyses of Marx’s line using rules from L1.
+
+Structural ambiguity, appropriately enough, comes in many forms. Two common
+kinds of ambiguity are attachment ambiguity and coordination ambiguity.
+
+A sentence has an attachment ambiguity if a particular constituent can be at-Attachmentambiguity
+tached to the parse tree at more than one place. The Groucho Marx sentence is
+an example of PP-attachment ambiguity. Various kinds of adverbial phrases are
+also subject to this kind of ambiguity. For instance, in the following example the
+gerundive-VP flying to Paris can be part of a gerundive sentence whose subject is
+the Eiffel Tower or it can be an adjunct modifying the VP headed by saw:
+
+(12.1) We saw the Eiffel Tower flying to Paris.
+
+In coordination ambiguity different sets of phrases can be conjoined by a con-Coordinationambiguity
+junction like and. For example, the phrase old men and women can be bracketed as
+[old [men and women]], referring to old men and old women, or as [old men] and
+[women], in which case it is only the men who are old.
+
+These ambiguities combine in complex ways in real sentences. A program that
+summarized the news, for example, would need to be able to parse sentences like
+the following from the Brown corpus:
+
+(12.2) President Kennedy today pushed aside other White House business to
+devote all his time and attention to working on the Berlin crisis address he
+will deliver tomorrow night to the American people over nationwide
+television and radio.
+
+This sentence has a number of ambiguities, although since they are semantically
+unreasonable, it requires a careful reading to see them. The last noun phrase could be
+parsed [nationwide [television and radio]] or [[nationwide television] and radio].
+The direct object of pushed aside should be other White House business but could
+also be the bizarre phrase [other White House business to devote all his time and
+attention to working] (i.e., a structure like Kennedy affirmed [his intention to propose
+
+
+
+12.2 • CKY PARSING: A DYNAMIC PROGRAMMING APPROACH 3
+
+S
+
+VP
+
+NP
+
+Nominal
+
+PP
+
+in my pajamas
+
+Nominal
+
+Noun
+
+elephant
+
+Det
+
+an
+
+Verb
+
+shot
+
+NP
+
+Pronoun
+
+I
+
+S
+
+VP
+
+PP
+
+in my pajamas
+
+VP
+
+NP
+
+Nominal
+
+Noun
+
+elephant
+
+Det
+
+an
+
+Verb
+
+shot
+
+NP
+
+Pronoun
+
+I
+
+Figure 12.2 Two parse trees for an ambiguous sentence. The parse on the left corresponds to the humorous
+reading in which the elephant is in the pajamas, the parse on the right corresponds to the reading in which
+Captain Spaulding did the shooting in his pajamas.
+
+a new budget to address the deficit]). Then the phrase on the Berlin crisis address he
+will deliver tomorrow night to the American people could be an adjunct modifying
+the verb pushed. A PP like over nationwide television and radio could be attached
+to any of the higher VPs or NPs (e.g., it could modify people or night).
+
+The fact that there are many grammatically correct but semantically unreason-
+able parses for naturally occurring sentences is an irksome problem that affects all
+parsers. Ultimately, most natural language processing systems need to be able to
+choose a single correct parse from the multitude of possible parses through a process
+of syntactic disambiguation. Effective disambiguation algorithms require statisti-Syntacticdisambiguation
+cal, semantic, and contextual knowledge sources that vary in how well they can be
+integrated into parsing algorithms.
+
+Fortunately, the CKY algorithm presented in the next section is designed to effi-
+ciently handle structural ambiguities of the kind we’ve been discussing. And as we’ll
+see in Chapter 13, there are straightforward ways to integrate statistical techniques
+into the basic CKY framework to produce highly accurate parsers.
+
+12.2 CKY Parsing: A Dynamic Programming Approach
+
+The previous section introduced some of the problems associated with ambiguous
+grammars. Fortunately, dynamic programming provides a powerful framework for
+addressing these problems, just as it did with the Minimum Edit Distance, Viterbi,
+and Forward algorithms. Recall that dynamic programming approaches systemati-
+cally fill in tables of solutions to sub-problems. When complete, the tables contain
+the solution to all the sub-problems needed to solve the problem as a whole. In
+the case of syntactic parsing, these sub-problems represent parse trees for all the
+constituents detected in the input.
+
+The dynamic programming advantage arises from the context-free nature of our
+grammar rules — once a constituent has been discovered in a segment of the input
+
+
+
+4 CHAPTER 12 • SYNTACTIC PARSING
+
+we can record its presence and make it available for use in any subsequent derivation
+that might require it. This provides both time and storage efficiencies since subtrees
+can be looked up in a table, not reanalyzed. This section presents the Cocke-Kasami-
+Younger (CKY) algorithm, the most widely used dynamic-programming based ap-
+proach to parsing. Related approaches include the Earley algorithm (Earley, 1970)
+and chart parsing (Kaplan 1973, Kay 1982).
+
+12.2.1 Conversion to Chomsky Normal Form
+We begin our investigation of the CKY algorithm by examining the requirement
+that grammars used with it must be in Chomsky Normal Form (CNF). Recall from
+Chapter 11 that grammars in CNF are restricted to rules of the form A ? B C or
+A ? w. That is, the right-hand side of each rule must expand either to two non-
+terminals or to a single terminal. Restricting a grammar to CNF does not lead to
+any loss in expressiveness, since any context-free grammar can be converted into
+a corresponding CNF grammar that accepts exactly the same set of strings as the
+original grammar.
+
+Let’s start with the process of converting a generic CFG into one represented in
+CNF. Assuming we’re dealing with an ?-free grammar, there are three situations we
+need to address in any generic grammar: rules that mix terminals with non-terminals
+on the right-hand side, rules that have a single non-terminal on the right-hand side,
+and rules in which the length of the right-hand side is greater than 2.
+
+The remedy for rules that mix terminals and non-terminals is to simply introduce
+a new dummy non-terminal that covers only the original terminal. For example, a
+rule for an infinitive verb phrase such as INF-VP ? to VP would be replaced by the
+two rules INF-VP ? TO VP and TO ? to.
+
+Rules with a single non-terminal on the right are called unit productions. WeUnitproductions
+can eliminate unit productions by rewriting the right-hand side of the original rules
+with the right-hand side of all the non-unit production rules that they ultimately lead
+to. More formally, if A ?? B by a chain of one or more unit productions and B? ?
+is a non-unit production in our grammar, then we add A? ? for each such rule in
+the grammar and discard all the intervening unit productions. As we demonstrate
+with our toy grammar, this can lead to a substantial flattening of the grammar and a
+consequent promotion of terminals to fairly high levels in the resulting trees.
+
+Rules with right-hand sides longer than 2 are normalized through the introduc-
+tion of new non-terminals that spread the longer sequences over several new rules.
+Formally, if we have a rule like
+
+A ? B C ?
+
+we replace the leftmost pair of non-terminals with a new non-terminal and introduce
+a new production result in the following new rules:
+
+A ? X1 ?
+X1 ? B C
+
+In the case of longer right-hand sides, we simply iterate this process until the of-
+fending rule has been replaced by rules of length 2. The choice of replacing the
+leftmost pair of non-terminals is purely arbitrary; any systematic scheme that results
+in binary rules would suffice.
+
+In our current grammar, the rule S ? Aux NP VP would be replaced by the two
+rules S ? X1 VP and X1 ? Aux NP.
+
+
+
+12.2 • CKY PARSING: A DYNAMIC PROGRAMMING APPROACH 5
+
+L1 Grammar L1 in CNF
+S ? NP VP S ? NP VP
+S ? Aux NP VP S ? X1 VP
+
+X1 ? Aux NP
+S ? VP S ? book | include | prefer
+
+S ? Verb NP
+S ? X2 PP
+S ? Verb PP
+S ? VP PP
+
+NP ? Pronoun NP ? I | she | me
+NP ? Proper-Noun NP ? TWA | Houston
+NP ? Det Nominal NP ? Det Nominal
+Nominal ? Noun Nominal ? book | flight | meal | money
+Nominal ? Nominal Noun Nominal ? Nominal Noun
+Nominal ? Nominal PP Nominal ? Nominal PP
+VP ? Verb VP ? book | include | prefer
+VP ? Verb NP VP ? Verb NP
+VP ? Verb NP PP VP ? X2 PP
+
+X2 ? Verb NP
+VP ? Verb PP VP ? Verb PP
+VP ? VP PP VP ? VP PP
+PP ? Preposition NP PP ? Preposition NP
+Figure 12.3 L1 Grammar and its conversion to CNF. Note that although they aren’t shown
+here, all the original lexical entries from L1 carry over unchanged as well.
+
+The entire conversion process can be summarized as follows:
+
+1. Copy all conforming rules to the new grammar unchanged.
+2. Convert terminals within rules to dummy non-terminals.
+3. Convert unit-productions.
+4. Make all rules binary and add them to new grammar.
+
+Figure 12.3 shows the results of applying this entire conversion procedure to
+the L1 grammar introduced earlier on page 2. Note that this figure doesn’t show
+the original lexical rules; since these original lexical rules are already in CNF, they
+all carry over unchanged to the new grammar. Figure 12.3 does, however, show
+the various places where the process of eliminating unit productions has, in effect,
+created new lexical rules. For example, all the original verbs have been promoted to
+both VPs and to Ss in the converted grammar.
+
+12.2.2 CKY Recognition
+With our grammar now in CNF, each non-terminal node above the part-of-speech
+level in a parse tree will have exactly two daughters. A two-dimensional matrix can
+be used to encode the structure of an entire tree. For a sentence of length n, we will
+work with the upper-triangular portion of an (n+1)× (n+1) matrix. Each cell [i, j]
+in this matrix contains the set of non-terminals that represent all the constituents that
+span positions i through j of the input. Since our indexing scheme begins with 0,
+it’s natural to think of the indexes as pointing at the gaps between the input words
+(as in 0 Book 1 that 2 flight 3). It follows then that the cell that represents the entire
+input resides in position [0,n] in the matrix.
+
+
+
+6 CHAPTER 12 • SYNTACTIC PARSING
+
+Since each non-terminal entry in our table has two daughters in the parse, it fol-
+lows that for each constituent represented by an entry [i, j], there must be a position
+in the input, k, where it can be split into two parts such that i < k < j. Given such
+a position k, the first constituent [i,k] must lie to the left of entry [i, j] somewhere
+along row i, and the second entry [k, j] must lie beneath it, along column j.
+
+To make this more concrete, consider the following example with its completed
+parse matrix, shown in Fig. 12.4.
+
+(12.3) Book the flight through Houston.
+
+The superdiagonal row in the matrix contains the parts of speech for each input word
+in the input. The subsequent diagonals above that superdiagonal contain constituents
+that cover all the spans of increasing length in the input.
+
+Book the flight through Houston
+
+S, VP, Verb, 
+Nominal, 
+Noun
+
+S,VP,X2 S,VP,X2
+
+Det NP NP
+
+Nominal,
+Noun
+
+Nominal
+
+Prep PP
+
+NP,
+Proper-
+Noun
+
+[0,1] [0,2] [0,3] [0,4] [0,5]
+
+[1,2] [1,3]
+
+[2,3]
+
+[1,4]
+
+[2,5][2,4]
+
+[3,4]
+
+[4,5]
+
+[3,5]
+
+[1,5]
+
+Figure 12.4 Completed parse table for Book the flight through Houston.
+
+Given this setup, CKY recognition consists of filling the parse table in the right
+way. To do this, we’ll proceed in a bottom-up fashion so that at the point where
+we are filling any cell [i, j], the cells containing the parts that could contribute to
+this entry (i.e., the cells to the left and the cells below) have already been filled.
+The algorithm given in Fig. 12.5 fills the upper-triangular matrix a column at a time
+working from left to right, with each column filled from bottom to top, as the right
+side ofFig. 12.4 illustrates. This scheme guarantees that at each point in time we
+have all the information we need (to the left, since all the columns to the left have
+already been filled, and below since we’re filling bottom to top). It also mirrors on-
+line parsing since filling the columns from left to right corresponds to processing
+each word one at a time.
+
+The outermost loop of the algorithm given in Fig. 12.5 iterates over the columns,
+and the second loop iterates over the rows, from the bottom up. The purpose of the
+innermost loop is to range over all the places where a substring spanning i to j in
+the input might be split in two. As k ranges over the places where the string can be
+split, the pairs of cells we consider move, in lockstep, to the right along row i and
+down along column j. Figure 12.6 illustrates the general case of filling cell [i, j]. At
+each such split, the algorithm considers whether the contents of the two cells can be
+combined in a way that is sanctioned by a rule in the grammar. If such a rule exists,
+the non-terminal on its left-hand side is entered into the table.
+
+
+
+12.2 • CKY PARSING: A DYNAMIC PROGRAMMING APPROACH 7
+
+function CKY-PARSE(words, grammar) returns table
+
+for j? from 1 to LENGTH(words) do
+for all {A | A ? words[ j] ? grammar}
+
+table[ j?1, j]? table[ j?1, j] ? A
+for i? from j?2 downto 0 do
+
+for k? i+1 to j?1 do
+for all {A | A ? BC ? grammar and B ? table[i,k] and C ? table[k, j]}
+
+table[i,j]? table[i,j] ? A
+
+Figure 12.5 The CKY algorithm.
+
+...
+
+...
+
+[0,n]
+
+[i,i+1] [i,i+2] [i,j-2] [i,j-1]
+
+[i+1,j]
+
+[i+2,j]
+
+[j-1,j]
+
+[j-2,j]
+
+[i,j]
+
+...
+
+[0,1]
+
+[n-1, n]
+
+Figure 12.6 All the ways to fill the [i, j]th cell in the CKY table.
+
+Figure 12.7 shows how the five cells of column 5 of the table are filled after the
+word Houston is read. The arrows point out the two spans that are being used to add
+an entry to the table. Note that the action in cell [0,5] indicates the presence of three
+alternative parses for this input, one where the PP modifies the flight, one where
+it modifies the booking, and one that captures the second argument in the original
+VP? Verb NP PP rule, now captured indirectly with the VP? X2 PP rule.
+
+
+
+8 CHAPTER 12 • SYNTACTIC PARSING
+
+Book the flight through Houston
+
+S, VP, Verb, 
+Nominal, 
+Noun
+
+S,VP,X2
+
+Det NP
+
+Nominal,
+Noun
+
+Nominal
+
+Prep
+
+NP,
+Proper-
+Noun
+
+[0,1] [0,2] [0,3] [0,4] [0,5]
+
+[1,2] [1,3]
+
+[2,3]
+
+[1,4]
+
+[2,5][2,4]
+
+[3,4]
+
+[4,5]
+
+[3,5]
+
+[1,5]
+
+Book the flight through Houston
+
+S, VP, Verb, 
+Nominal, 
+Noun
+
+S,VP,X2
+
+Det NP NP
+
+Nominal,
+Noun
+
+Prep PP
+
+NP,
+Proper-
+Noun
+
+[0,1] [0,2] [0,3] [0,4] [0,5]
+
+[1,2] [1,3]
+
+[2,3]
+
+[1,4]
+
+[2,5][2,4]
+
+[3,4]
+
+[4,5]
+
+[3,5]
+
+[1,5]
+
+Book the flight through Houston
+
+S, VP, Verb, 
+Nominal, 
+Noun
+
+S,VP,X2
+
+Det NP NP
+
+Nominal,
+Noun
+
+Nominal
+
+Prep PP
+
+NP,
+Proper-
+Noun
+
+[0,1] [0,2] [0,3] [0,4] [0,5]
+
+[1,2] [1,3]
+
+[2,3]
+
+[1,4]
+
+[2,5][2,4]
+
+[3,4]
+
+[4,5]
+
+[3,5]
+
+[1,5]
+
+Book the flight through Houston
+
+S, VP, Verb, 
+Nominal, 
+Noun
+
+S,VP,X2
+
+Det NP NP
+
+Nominal,
+Noun
+
+Nominal
+
+Prep PP
+
+NP,
+Proper-
+Noun
+
+[0,1] [0,2] [0,3] [0,4] [0,5]
+
+[1,2] [1,3]
+
+[2,3]
+
+[1,4]
+
+[2,5][2,4]
+
+[3,4]
+
+[4,5]
+
+[3,5]
+
+[1,5]
+
+Book the flight through Houston
+
+S, VP, Verb, 
+Nominal, 
+Noun
+
+S,
+VP,
+X2
+
+Det NP NP
+
+Nominal,
+Noun
+
+Nominal
+
+Prep PP
+
+NP,
+Proper-
+Noun
+
+[0,1] [0,2] [0,3] [0,4]
+
+[1,2] [1,3]
+
+[2,3]
+
+[1,4]
+
+[2,5][2,4]
+
+[3,4]
+
+[4,5]
+
+[3,5]
+
+[1,5]
+
+S2, VP
+S3
+
+S1,VP, X2
+
+Figure 12.7 Filling the cells of column 5 after reading the word Houston.
+
+
+
+12.3 • PARTIAL PARSING 9
+
+12.2.3 CKY Parsing
+The algorithm given in Fig. 12.5 is a recognizer, not a parser; for it to succeed, it
+simply has to find an S in cell [0,n]. To turn it into a parser capable of returning all
+possible parses for a given input, we can make two simple changes to the algorithm:
+the first change is to augment the entries in the table so that each non-terminal is
+paired with pointers to the table entries from which it was derived (more or less as
+shown in Fig. 12.7), the second change is to permit multiple versions of the same
+non-terminal to be entered into the table (again as shown in Fig. 12.7). With these
+changes, the completed table contains all the possible parses for a given input. Re-
+turning an arbitrary single parse consists of choosing an S from cell [0,n] and then
+recursively retrieving its component constituents from the table.
+
+Of course, returning all the parses for a given input may incur considerable cost
+since an exponential number of parses may be associated with a given input. In such
+cases, returning all the parses will have an unavoidable exponential cost. Looking
+forward to Chapter 13, we can also think about retrieving the best parse for a given
+input by further augmenting the table to contain the probabilities of each entry. Re-
+trieving the most probable parse consists of running a suitably modified version of
+the Viterbi algorithm from Chapter 10 over the completed parse table.
+
+12.2.4 CKY in Practice
+Finally, we should note that while the restriction to CNF does not pose a prob-
+lem theoretically, it does pose some non-trivial problems in practice. Obviously, as
+things stand now, our parser isn’t returning trees that are consistent with the grammar
+given to us by our friendly syntacticians. In addition to making our grammar devel-
+opers unhappy, the conversion to CNF will complicate any syntax-driven approach
+to semantic analysis.
+
+One approach to getting around these problems is to keep enough information
+around to transform our trees back to the original grammar as a post-processing step
+of the parse. This is trivial in the case of the transformation used for rules with length
+greater than 2. Simply deleting the new dummy non-terminals and promoting their
+daughters restores the original tree.
+
+In the case of unit productions, it turns out to be more convenient to alter the ba-
+sic CKY algorithm to handle them directly than it is to store the information needed
+to recover the correct trees. Exercise 12.3 asks you to make this change. Many of
+the probabilistic parsers presented in Chapter 13 use the CKY algorithm altered in
+just this manner. Another solution is to adopt a more complex dynamic program-
+ming solution that simply accepts arbitrary CFGs. The next section presents such an
+approach.
+
+12.3 Partial Parsing
+
+Many language processing tasks do not require complex, complete parse trees for all
+inputs. For these tasks, a partial parse, or shallow parse, of input sentences mayPartial parse
+
+Shallow parse be sufficient. For example, information extraction systems generally do not extract
+all the possible information from a text: they simply identify and classify the seg-
+ments in a text that are likely to contain valuable information. Similarly, information
+retrieval systems may index texts according to a subset of the constituents found in
+
+
+
+10 CHAPTER 12 • SYNTACTIC PARSING
+
+them.
+There are many different approaches to partial parsing. Some make use of cas-
+
+cades of FSTs, of the kind discussed in Chapter 3, to produce tree-like represen-
+tations. These approaches typically produce flatter trees than the ones we’ve been
+discussing in this chapter and the previous one. This flatness arises from the fact
+that FST cascade approaches generally defer decisions that may require semantic or
+contextual factors, such as prepositional phrase attachments, coordination ambigu-
+ities, and nominal compound analyses. Nevertheless, the intent is to produce parse
+trees that link all the major constituents in an input.
+
+An alternative style of partial parsing is known as chunking. Chunking isChunking
+the process of identifying and classifying the flat, non-overlapping segments of a
+sentence that constitute the basic non-recursive phrases corresponding to the ma-
+jor parts-of-speech found in most wide-coverage grammars. This set typically in-
+cludes noun phrases, verb phrases, adjective phrases, and prepositional phrases; in
+other words, the phrases that correspond to the content-bearing parts-of-speech. Of
+course, not all applications require the identification of all of these categories; in-
+deed, the most common chunking task is to simply find all the base noun phrases in
+a text.
+
+Since chunked texts lack a hierarchical structure, a simple bracketing notation is
+sufficient to denote the location and the type of the chunks in a given example. The
+following example illustrates a typical bracketed notation.
+(12.4) [NP The morning flight] [PP from] [NP Denver] [VP has arrived.]
+This bracketing notation makes clear the two fundamental tasks that are involved
+in chunking: finding the non-overlapping extents of the chunks and assigning the
+correct label to the discovered chunks.
+
+Note that in this example all the words are contained in some chunk. This will
+not be the case in all chunking applications. Many words in any input will often fall
+outside of any chunk, for example, in systems searching for base NPs in their inputs,
+as in the following:
+(12.5) [NP The morning flight] from [NP Denver] has arrived.
+
+The details of what constitutes a syntactic base phrase for any given system
+varies according to the syntactic theories underlying the system and whether the
+phrases are being derived from a treebank. Nevertheless, some standard guidelines
+are followed in most systems. First and foremost, base phrases of a given type do
+not recursively contain any constituents of the same type. Eliminating this kind
+of recursion leaves us with the problem of determining the boundaries of the non-
+recursive phrases. In most approaches, base phrases include the headword of the
+phrase, along with any pre-head material within the constituent, while crucially ex-
+cluding any post-head material. Eliminating post-head modifiers from the major
+categories automatically removes the need to resolve attachment ambiguities. Note
+that this exclusion does lead to certain oddities, such as PPs and VPs often consist-
+ing solely of their heads. Thus, our earlier example a flight from Indianapolis to
+Houston on NWA is reduced to the following:
+(12.6) [NP a flight] [PP from] [NP Indianapolis][PP to][NP Houston][PP on][NP
+
+NWA]
+
+12.3.1 Machine Learning-Based Approaches to Chunking
+State-of-the-art approaches to chunking use supervised machine learning to train a
+chunker by using annotated data as a training set. As described earlier in Chapter 9,
+
+
+
+12.3 • PARTIAL PARSING 11
+
+we can view this task as one of sequence labeling, where a classifier is trained to
+label each element of the input sequence. Any of the standard approaches to training
+classifiers apply to this problem.
+
+The first step in such an approach is to cast the chunking process in a way that
+is amenable to sequence labeling. A particularly fruitful approach has been to treat
+chunking as a tagging task similar to part-of-speech tagging (Ramshaw and Marcus,
+1995). In this approach, a small tagset simultaneously encodes both the segmenta-
+tion and the labeling of the chunks in the input. The standard way to do this is called
+IOB tagging and is accomplished by introducing tags to represent the beginning (B)IOB tagging
+and internal (I) parts of each chunk, as well as those elements of the input that are
+outside (O) any chunk. Under this scheme, the size of the tagset is (2n+1), where
+n is the number of categories to be classified. The following example shows the
+bracketing notation of (12.4) on page 10 reframed as a tagging task:
+
+(12.7) The
+B NP
+
+morning
+I NP
+
+flight
+I NP
+
+from
+B PP
+
+Denver
+B NP
+
+has
+B VP
+
+arrived
+I VP
+
+The same sentence with only the base-NPs tagged illustrates the role of the O tags.
+
+(12.8) The
+B NP
+
+morning
+I NP
+
+flight
+I NP
+
+from
+O
+
+Denver
+B NP
+
+has
+O
+
+arrived.
+O
+
+Notice that there is no explicit encoding of the end of a chunk in this scheme; the
+end of any chunk is implicit in any transition from an I or B to a B or O tag. This
+encoding reflects the notion that when sequentially labeling words, it is generally
+easier (at least in English) to detect the beginning of a new chunk than it is to know
+when a chunk has ended. Not surprisingly, a variety of other tagging schemes rep-
+resent chunks in subtly different ways, including some that explicitly mark the end
+of constituents. Tjong Kim Sang and Veenstra (1999) describe three variations on
+this basic tagging scheme and investigate their performance on a variety of chunking
+tasks.
+
+Given such a scheme, building a chunker consists of training a classifier to la-
+bel each word of an input sentence with one of the IOB tags from the tagset. Of
+course, training requires training data consisting of the phrases of interest delimited
+and marked with the appropriate category. The direct approach is to annotate a rep-
+resentative corpus. Unfortunately, annotation efforts can be both expensive and time
+consuming. It turns out that the best place to find such data for chunking is in an
+existing treebank such as the Penn Treebank described in Chapter 11.
+
+Such treebanks provide a complete parse for each corpus sentence, allowing base
+syntactic phrases to be extracted from the parse constituents. To find the phrases
+we’re interested in, we just need to know the appropriate non-terminal names in the
+corpus. Finding chunk boundaries requires finding the head and then including the
+material to the left of the head, ignoring the text to the right. This is somewhat
+error-prone since it relies on the accuracy of the head-finding rules described in
+Chapter 11.
+
+Having extracted a training corpus from a treebank, we must now cast the train-
+ing data into a form that’s useful for training classifiers. In this case, each input
+can be represented as a set of features extracted from a context window that sur-
+rounds the word to be classified. Using a window that extends two words before
+and two words after the word being classified seems to provide reasonable perfor-
+mance. Features extracted from this window include the words themselves, their
+parts-of-speech, and the chunk tags of the preceding inputs in the window.
+
+
+
+12 CHAPTER 12 • SYNTACTIC PARSING
+
+B_NP I_NP ?      
+
+The flight from Denver has arrived  
+
+Classifier
+
+DT NN NN IN NNP
+
+Corresponding feature representation
+
+The, DT, B_NP, morning, NN, I_NP, flight, NN, from, IN, Denver, NNP
+
+Label
+
+I_NP
+
+morning
+
+Figure 12.8 A sequential-classifier-based approach to chunking. The chunker slides a context window over
+the sentence, classifying words as it proceeds. At this point, the classifier is attempting to label flight. Features
+derived from the context typically include the words, part-of-speech tags as well as the previously assigned
+chunk tags.
+
+Figure 12.8 illustrates this scheme with the example given earlier. During train-
+ing, the classifier would be provided with a training vector consisting of the values
+of 13 features; the two words to the left of the decision point, their parts-of-speech
+and chunk tags, the word to be tagged along with its part-of-speech, the two words
+that follow along with their parts-of speech, and finally the correct chunk tag, in this
+case, I NP. During classification, the classifier is given the same vector without the
+answer and assigns the most appropriate tag from its tagset.
+
+12.3.2 Chunking-System Evaluations
+
+As with the evaluation of part-of-speech taggers, the evaluation of chunkers pro-
+ceeds by comparing chunker output with gold-standard answers provided by human
+annotators. However, unlike part-of-speech tagging, word-by-word accuracy mea-
+sures are not appropriate. Instead, chunkers are evaluated according to the notions of
+precision, recall, and the F-measure borrowed from the field of information retrieval.
+
+Precision measures the percentage of system-provided chunks that were correct.Precision
+Correct here means that both the boundaries of the chunk and the chunk’s label are
+correct. Precision is therefore defined as
+
+Precision: = Number of correct chunks given by systemTotal number of chunks given by system
+
+Recall measures the percentage of chunks actually present in the input that wereRecall
+correctly identified by the system. Recall is defined as
+
+Recall: = Number of correct chunks given by systemTotal number of actual chunks in the text
+The F-measure (van Rijsbergen, 1975) provides a way to combine these twoF-measure
+
+
+
+12.4 • SUMMARY 13
+
+measures into a single metric. The F-measure is defined as
+
+F? =
+(? 2 +1)PR
+
+? 2P+R
+
+The ? parameter differentially weights the importance of recall and precision,
+based perhaps on the needs of an application. Values of ? > 1 favor recall, while
+values of ? < 1 favor precision. When ? = 1, precision and recall are equally bal-
+anced; this is sometimes called F?=1 or just F1:
+
+F1 =
+2PR
+
+P+R
+(12.9)
+
+F-measure comes from a weighted harmonic mean of precision and recall. The
+harmonic mean of a set of numbers is the reciprocal of the arithmetic mean of recip-
+rocals:
+
+HarmonicMean(a1,a2,a3,a4, ...,an) =
+n
+
+1
+a1
++ 1a2 +
+
+1
+a3
++ ...+ 1an
+
+(12.10)
+
+and hence F-measure is
+
+F =
+1
+
+? 1P +(1??)
+1
+R
+
+or
+(
+
+with ? 2 =
+1??
+
+?
+
+)
+F =
+
+(? 2 +1)PR
+? 2P+R
+
+(12.11)
+
+Statistical significance results on sequence labeling tasks such as chunking can
+be computed using matched-pair tests such as McNemar’s test, or variants such
+as the Matched-Pair Sentence Segment Word Error (MAPSSWE) test described on
+page ??.
+
+Factors limiting the performance of current systems include part-of-speech tag-
+ging accuracy, inconsistencies in the training data introduced by the process of ex-
+tracting chunks from parse trees, and difficulty resolving ambiguities involving con-
+junctions. Consider the following examples that involve pre-nominal modifiers and
+conjunctions.
+
+(12.12) [NP Late arrivals and departures] are commonplace during winter.
+
+(12.13) [NP Late arrivals] and [NP cancellations] are commonplace during winter.
+
+In the first example, late is shared by both arrivals and departures, yielding a
+single long base-NP. In the second example, late is not shared and modifies arrivals
+alone, thus yielding two base-NPs. Distinguishing these two situations, and others
+like them, requires access to semantic and context information unavailable to current
+chunkers.
+
+12.4 Summary
+
+The two major ideas introduced in this chapter are those of parsing and partial
+parsing. Here’s a summary of the main points we covered about these ideas:
+
+• Structural ambiguity is a significant problem for parsers. Common sources
+of structural ambiguity include PP-attachment, coordination ambiguity,
+and noun-phrase bracketing ambiguity.
+
+
+
+14 CHAPTER 12 • SYNTACTIC PARSING
+
+• Dynamic programming parsing algorithms, such as CKY, use a table of
+partial parses to efficiently parse ambiguous sentences.
+
+• CKY restricts the form of the grammar to Chomsky normal form (CNF).
+• Many practical problems, including information extraction problems, can be
+
+solved without full parsing.
+• Partial parsing and chunking are methods for identifying shallow syntactic
+
+constituents in a text.
+• State-of-the-art methods for partial parsing use supervised machine learning
+
+techniques.
+
+Bibliographical and Historical Notes
+Writing about the history of compilers, Knuth notes:
+
+In this field there has been an unusual amount of parallel discovery of
+the same technique by people working independently.
+
+Well, perhaps not unusual, if multiple discovery is the norm (see page ??). But
+there has certainly been enough parallel publication that this history errs on the side
+of succinctness in giving only a characteristic early mention of each algorithm; the
+interested reader should see Aho and Ullman (1972).
+
+Bottom-up parsing seems to have been first described by Yngve (1955), who
+gave a breadth-first, bottom-up parsing algorithm as part of an illustration of a ma-
+chine translation procedure. Top-down approaches to parsing and translation were
+described (presumably independently) by at least Glennie (1960), Irons (1961), and
+Kuno and Oettinger (1963). Dynamic programming parsing, once again, has a his-
+tory of independent discovery. According to Martin Kay (personal communication),
+a dynamic programming parser containing the roots of the CKY algorithm was first
+implemented by John Cocke in 1960. Later work extended and formalized the algo-
+rithm, as well as proving its time complexity (Kay 1967,Younger 1967,Kasami 1965).
+The related well-formed substring table (WFST) seems to have been indepen-WFST
+dently proposed by Kuno (1965) as a data structure that stores the results of all pre-
+vious computations in the course of the parse. Based on a generalization of Cocke’s
+work, a similar data structure had been independently described in Kay 1967, Kay 1973.
+The top-down application of dynamic programming to parsing was described in
+Earley’s Ph.D. dissertation (Earley 1968, Earley 1970). Sheil (1976) showed the
+equivalence of the WFST and the Earley algorithm. Norvig (1991) shows that the
+efficiency offered by dynamic programming can be captured in any language with a
+memoization function (such as in LISP) simply by wrapping the memoization oper-
+ation around a simple top-down parser.
+
+While parsing via cascades of finite-state automata had been common in the
+early history of parsing (Harris, 1962), the focus shifted to full CFG parsing quite
+soon afterward. Church (1980) argued for a return to finite-state grammars as a
+processing model for natural language understanding; other early finite-state parsing
+models include Ejerhed (1988). Abney (1991) argued for the important practical role
+of shallow parsing. Much recent work on shallow parsing applies machine learning
+to the task of learning the patterns; see, for example, Ramshaw and Marcus (1995),
+Argamon et al. (1998), Munoz et al. (1999).
+
+
+
+EXERCISES 15
+
+The classic reference for parsing algorithms is Aho and Ullman (1972); although
+the focus of that book is on computer languages, most of the algorithms have been
+applied to natural language. A good programming languages textbook such as Aho
+et al. (1986) is also useful.
+
+Exercises
+12.1 Implement the algorithm to convert arbitrary context-free grammars to CNF.
+
+Apply your program to the L1 grammar.
+
+12.2 Implement the CKY algorithm and test it with your converted L1 grammar.
+
+12.3 Rewrite the CKY algorithm given in Fig. 12.5 on page 7 so that it can accept
+grammars that contain unit productions.
+
+12.4 Discuss the relative advantages and disadvantages of partial versus full pars-
+ing.
+
+12.5 Discuss how to augment a parser to deal with input that may be incorrect, for
+example, containing spelling errors or mistakes arising from automatic speech
+recognition.
+
+
+
+16 Chapter 12 • Syntactic Parsing
+
+Abney, S. P. (1991). Parsing by chunks. In Berwick,
+R. C., Abney, S. P., and Tenny, C. (Eds.), Principle-Based
+Parsing: Computation and Psycholinguistics, pp. 257–278.
+Kluwer.
+
+Aho, A. V., Sethi, R., and Ullman, J. D. (1986). Compilers:
+Principles, Techniques, and Tools. Addison-Wesley.
+
+Aho, A. V. and Ullman, J. D. (1972). The Theory of Parsing,
+Translation, and Compiling, Vol. 1. Prentice Hall.
+
+Argamon, S., Dagan, I., and Krymolowski, Y. (1998). A
+memory-based approach to learning shallow natural lan-
+guage patterns. In COLING/ACL-98, Montreal, pp. 67–73.
+
+Church, K. W. (1980). On Memory Limitations in Natural
+Language Processing Master’s thesis, MIT. Distributed by
+the Indiana University Linguistics Club.
+
+Earley, J. (1968). An Efficient Context-Free Parsing Algo-
+rithm. Ph.D. thesis, Carnegie Mellon University, Pitts-
+burgh, PA.
+
+Earley, J. (1970). An efficient context-free parsing algorithm.
+Communications of the ACM, 6(8), 451–455. Reprinted in
+Grosz et al. (1986).
+
+Ejerhed, E. I. (1988). Finding clauses in unrestricted text by
+finitary and stochastic methods. In ANLP 1988, pp. 219–
+227.
+
+Glennie, A. (1960). On the syntax machine and the construc-
+tion of a universal compiler. Tech. rep. No. 2, Contr. NR
+049-141, Carnegie Mellon University (at the time Carnegie
+Institute of Technology), Pittsburgh, PA.
+
+Harris, Z. S. (1962). String Analysis of Sentence Structure.
+Mouton, The Hague.
+
+Irons, E. T. (1961). A syntax directed compiler for ALGOL
+60. Communications of the ACM, 4, 51–55.
+
+Kaplan, R. M. (1973). A general syntactic processor. In
+Rustin, R. (Ed.), Natural Language Processing, pp. 193–
+241. Algorithmics Press.
+
+Kasami, T. (1965). An efficient recognition and syntax
+analysis algorithm for context-free languages. Tech. rep.
+AFCRL-65-758, Air Force Cambridge Research Labora-
+tory, Bedford, MA.
+
+Kay, M. (1967). Experiments with a powerful parser. In
+Proc. 2eme Conference Internationale sur le Traitement
+Automatique des Langues, Grenoble.
+
+Kay, M. (1973). The MIND system. In Rustin, R. (Ed.),
+Natural Language Processing, pp. 155–188. Algorithmics
+Press.
+
+Kay, M. (1982). Algorithm schemata and data structures in
+syntactic processing. In Alle?n, S. (Ed.), Text Processing:
+Text Analysis and Generation, Text Typology and Attribu-
+tion, pp. 327–358. Almqvist and Wiksell, Stockholm.
+
+Kuno, S. (1965). The predictive analyzer and a path elimi-
+nation technique. Communications of the ACM, 8(7), 453–
+462.
+
+Kuno, S. and Oettinger, A. G. (1963). Multiple-path syn-
+tactic analyzer. In Popplewell, C. M. (Ed.), Information
+Processing 1962: Proceedings of the IFIP Congress 1962,
+Munich, pp. 306–312. North-Holland. Reprinted in Grosz
+et al. (1986).
+
+Munoz, M., Punyakanok, V., Roth, D., and Zimak, D.
+(1999). A learning approach to shallow parsing. In
+EMNLP/VLC-99, College Park, MD, pp. 168–178.
+
+Norvig, P. (1991). Techniques for automatic memoization
+with applications to context-free parsing. Computational
+Linguistics, 17(1), 91–98.
+
+Ramshaw, L. A. and Marcus, M. P. (1995). Text chunking
+using transformation-based learning. In Proceedings of the
+3rd Annual Workshop on Very Large Corpora, pp. 82–94.
+
+Sheil, B. A. (1976). Observations on context free parsing.
+SMIL: Statistical Methods in Linguistics, 1, 71–109.
+
+Tjong Kim Sang, E. F. and Veenstra, J. (1999). Representing
+text chunks. In EACL-99, pp. 173–179.
+
+van Rijsbergen, C. J. (1975). Information Retrieval. Butter-
+worths.
+
+Yngve, V. H. (1955). Syntax and the problem of multiple
+meaning. In Locke, W. N. and Booth, A. D. (Eds.), Ma-
+chine Translation of Languages, pp. 208–226. MIT Press.
+
+Younger, D. H. (1967). Recognition and parsing of context-
+free languages in time n3. Information and Control, 10,
+189–208.
+
+
+	Syntactic Parsing
+	Ambiguity
+	CKY Parsing: A Dynamic Programming Approach
+	Conversion to Chomsky Normal Form
+	CKY Recognition
+	CKY Parsing
+	CKY in Practice
+
+	Partial Parsing
+	Machine Learning-Based Approaches to Chunking
+	Chunking-System Evaluations
+
+	Summary
+	Bibliographical and Historical Notes
+	Exercises
+
+
